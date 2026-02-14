@@ -2,6 +2,8 @@
 #include <diagram_placement/class_diagram_layout_constants.hpp>
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <queue>
 
 namespace diagram_placement {
 
@@ -66,24 +68,101 @@ void PhysicsLayout::build_world(const std::unordered_map<std::string, Rect>* pre
     world_def.contactDampingRatio = 5.0f;
     world_id_ = b2CreateWorld(&world_def);
 
-    double next_x = padding;
-    double next_y = padding;
-    const double wrap_width = 2200.0;
+    // --- Compute inheritance hierarchy for initial layout ---
+    // 1. Build depth map via BFS from root classes.
+    std::unordered_map<std::string, int> depth_map;
+    std::unordered_map<std::string, std::vector<std::string>> children_of;
+    for (const auto& cls : diagram_->classes) {
+        if (cls.parent_class_id.empty()) {
+            depth_map[cls.id] = 0;
+        } else {
+            children_of[cls.parent_class_id].push_back(cls.id);
+        }
+    }
+    std::queue<std::string> bfs_queue;
+    for (const auto& kv : depth_map) {
+        bfs_queue.push(kv.first);
+    }
+    while (!bfs_queue.empty()) {
+        const std::string cur = bfs_queue.front();
+        bfs_queue.pop();
+        const auto cit = children_of.find(cur);
+        if (cit == children_of.end()) continue;
+        for (const auto& child_id : cit->second) {
+            if (depth_map.find(child_id) == depth_map.end()) {
+                depth_map[child_id] = depth_map[cur] + 1;
+                bfs_queue.push(child_id);
+            }
+        }
+    }
+    // Assign depth 0 to any class not reached (disconnected).
+    for (const auto& cls : diagram_->classes) {
+        if (depth_map.find(cls.id) == depth_map.end()) {
+            depth_map[cls.id] = 0;
+        }
+    }
 
-    for (std::size_t i = 0; i < diagram_->classes.size(); ++i) {
-        const auto& cls = diagram_->classes[i];
+    // 2. Precompute sizes for all classes.
+    struct BlockInfo {
+        std::string id;
+        double width;
+        double height;
+    };
+    std::unordered_map<std::string, BlockInfo> block_info;
+    for (const auto& cls : diagram_->classes) {
         bool expanded_state = false;
         if (const auto it = expanded_.find(cls.id); it != expanded_.end()) {
             expanded_state = it->second;
         }
-
-        Rect size = fallback_size(expanded_state);
+        Rect sz = fallback_size(expanded_state);
         if (const auto it = sizes_.find(cls.id); it != sizes_.end()) {
-            size.width = it->second.width;
-            size.height = it->second.height;
+            sz.width = it->second.width;
+            sz.height = it->second.height;
         }
+        block_info[cls.id] = BlockInfo{cls.id, sz.width, sz.height};
+    }
 
-        Rect initial = size;
+    // 3. Group classes by depth level, preserving order within each level.
+    std::map<int, std::vector<std::string>> levels;
+    for (const auto& cls : diagram_->classes) {
+        levels[depth_map[cls.id]].push_back(cls.id);
+    }
+
+    // 4. Compute hierarchy-based positions (centered rows).
+    const double row_gap = 60.0;
+    std::unordered_map<std::string, std::pair<double, double>> hierarchy_pos;
+    double cur_y = padding;
+    for (const auto& kv : levels) {
+        const auto& ids = kv.second;
+        // Compute total width and max height of this row.
+        double total_w = 0.0;
+        double max_h = 0.0;
+        for (const auto& id : ids) {
+            const auto& bi = block_info[id];
+            total_w += bi.width;
+            if (bi.height > max_h) max_h = bi.height;
+        }
+        total_w += static_cast<double>(ids.size() > 1 ? ids.size() - 1 : 0) * block_margin;
+
+        // Center this row.
+        double x = padding;
+        for (const auto& id : ids) {
+            const auto& bi = block_info[id];
+            hierarchy_pos[id] = {x, cur_y};
+            x += bi.width + block_margin;
+        }
+        cur_y += max_h + row_gap;
+    }
+
+    // --- Create bodies ---
+    for (std::size_t i = 0; i < diagram_->classes.size(); ++i) {
+        const auto& cls = diagram_->classes[i];
+        const auto& bi = block_info[cls.id];
+
+        Rect initial;
+        initial.width = bi.width;
+        initial.height = bi.height;
+
         bool from_previous = false;
         if (previous_positions) {
             if (const auto it = previous_positions->find(cls.id); it != previous_positions->end()) {
@@ -93,21 +172,14 @@ void PhysicsLayout::build_world(const std::unordered_map<std::string, Rect>* pre
             }
         }
         if (!from_previous) {
-            if (cls.x != 0.0 || cls.y != 0.0) {
-                initial.x = cls.x;
-                initial.y = cls.y;
-            } else {
-                initial.x = next_x;
-                initial.y = next_y;
-            }
+            const auto& pos = hierarchy_pos[cls.id];
+            initial.x = pos.first;
+            initial.y = pos.second;
         }
 
-        if (!from_previous && cls.x == 0.0 && cls.y == 0.0) {
-            next_x += size.width + block_margin;
-            if (next_x > wrap_width) {
-                next_x = padding;
-                next_y += 180.0;
-            }
+        bool expanded_state = false;
+        if (const auto it = expanded_.find(cls.id); it != expanded_.end()) {
+            expanded_state = it->second;
         }
 
         b2BodyDef body_def = b2DefaultBodyDef();
