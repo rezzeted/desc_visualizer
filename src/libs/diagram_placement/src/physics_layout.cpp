@@ -9,7 +9,7 @@ namespace {
 
 using namespace layout;
 
-constexpr float kLinearDamping = 5.0f;
+constexpr float kLinearDamping = 2.0f;
 constexpr float kAngularDamping = 8.0f;
 constexpr float kMinStep = 1.0f / 240.0f;
 constexpr float kMaxStep = 1.0f / 30.0f;
