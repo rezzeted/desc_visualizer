@@ -1,0 +1,30 @@
+# Cursor Rules
+# This file contains rules for the Cursor AI assistant.
+
+# Project Context
+# - The project uses CMake for build configuration.
+# - The project uses C++20 standard.
+# - The build directory is `_build`.
+
+# Coding Style
+# - Use C++ for backend/native code.
+
+# Documentation
+# - Add comments for complex logic.
+
+# Directory Structure
+# - Place third-party libraries in `thirdparty/`.
+#   - Current third-party libs: `imgui`, `sdl3`.
+# - Place project source code in:
+#   - `src/apps/` for applications.
+#   - `src/libs/` for shared libraries.
+
+# Build Instructions
+# - Use `build_vs.bat` to generate and build the project for Visual Studio.
+# - CMake build output goes to `_build/`.
+# - Executables are located in `_build/bin/Debug/` (or Release).
+# - Third-party libraries (like ImGui) are linked as static libraries.
+
+# Dependencies
+# - ImGui is located in `thirdparty/imgui`. 
+
