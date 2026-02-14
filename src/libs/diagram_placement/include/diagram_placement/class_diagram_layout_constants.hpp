@@ -80,12 +80,16 @@ inline constexpr double expanded_content_height(std::size_t parent_items,
     const double prop_visible = static_cast<double>(visible_item_rows(prop_items));
     const double comp_visible = static_cast<double>(visible_item_rows(comp_items));
     const double child_visible = static_cast<double>(visible_item_rows(child_items));
+    const double row_gap_ratio = row_height > 0.0 ? (row_inner_gap / row_height) : 0.0;
+    const double group_gap_ratio = row_height > 0.0 ? (group_vertical_gap / row_height) : 0.0;
+    const double effective_row_inner_gap = effective_row_height * row_gap_ratio;
+    const double effective_group_vertical_gap = effective_row_height * group_gap_ratio;
     return (1.0 + parent_visible) * effective_row_height
         + (1.0 + prop_visible) * effective_row_height
         + (1.0 + comp_visible) * effective_row_height
         + (1.0 + child_visible) * effective_row_height
-        + (parent_visible + prop_visible + comp_visible + child_visible) * row_inner_gap
-        + 3.0 * group_vertical_gap;
+        + (parent_visible + prop_visible + comp_visible + child_visible) * effective_row_inner_gap
+        + 3.0 * effective_group_vertical_gap;
 }
 
 } // namespace layout

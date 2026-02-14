@@ -42,6 +42,9 @@ std::unordered_map<std::string, diagram_placement::Rect> compute_class_block_siz
     const std::unordered_map<std::string, bool>& expanded)
 {
     std::unordered_map<std::string, diagram_placement::Rect> out;
+    const double font_world_height = static_cast<double>(ImGui::GetFontSize());
+    const double effective_row_height = std::max(row_height, min_row_height_for_font(font_world_height));
+    const double component_subproperty_indent = content_indent * 2.0;
     for (const auto& c : diagram.classes) {
         diagram_placement::Rect r;
         r.x = 0;
@@ -81,7 +84,7 @@ std::unordered_map<std::string, diagram_placement::Rect> compute_class_block_siz
             max_text_w = std::max(max_text_w, measure_text_width(line.c_str()));
             for (const auto& p : comp.properties) {
                 std::string sub_line = format_typed_name_with_default(p.type, p.name, p.default_value);
-                max_text_w = std::max(max_text_w, measure_text_width(sub_line.c_str()));
+                max_text_w = std::max(max_text_w, measure_text_width(sub_line.c_str()) + component_subproperty_indent);
             }
         }
         for (const auto& co : c.child_objects) {
@@ -105,7 +108,8 @@ std::unordered_map<std::string, diagram_placement::Rect> compute_class_block_siz
             1u,
             c.properties.size(),
             component_rows,
-            c.child_objects.size());
+            c.child_objects.size(),
+            effective_row_height);
         r.height += content_inset_bottom;
 
         out[c.id] = r;

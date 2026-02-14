@@ -31,6 +31,8 @@ std::size_t component_row_count(const diagram_model::DiagramClass& c) {
     return rows;
 }
 
+constexpr double component_subproperty_indent = content_indent * 2.0;
+
 // Inflated rect = BB expanded by margin; we want inflated rects to be at least `gap` apart.
 void inflated_rect(double x, double y, double w, double h, double m,
     double& left, double& top, double& right, double& bottom)
@@ -150,7 +152,7 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                         content_w = std::max(content_w, estimate_text_width(comp.type + ": " + comp.name));
                         for (const auto& p : comp.properties) {
                             content_w = std::max(content_w, estimate_text_width(
-                                format_typed_name_with_default(p.type, p.name, p.default_value)));
+                                format_typed_name_with_default(p.type, p.name, p.default_value)) + component_subproperty_indent);
                         }
                     }
                     for (const auto& co : c.child_objects) {
@@ -193,7 +195,7 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                     content_w = std::max(content_w, estimate_text_width(comp.type + ": " + comp.name));
                     for (const auto& p : comp.properties) {
                         content_w = std::max(content_w, estimate_text_width(
-                            format_typed_name_with_default(p.type, p.name, p.default_value)));
+                            format_typed_name_with_default(p.type, p.name, p.default_value)) + component_subproperty_indent);
                     }
                 }
                 for (const auto& co : c.child_objects) {
