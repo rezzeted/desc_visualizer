@@ -81,18 +81,16 @@ ContentSize compute_class_content_size(
         for (std::size_t pi = 0; pi < cls.parent_class_ids.size(); ++pi) {
             const diagram_model::DiagramClass* parent = find_class(diagram, cls.parent_class_ids[pi]);
             const char* parent_name = parent ? parent->type_name.c_str() : cls.parent_class_ids[pi].c_str();
-            // Parent name row (+ space for nav button + expand button)
-            track_text_w(measure_text_width(parent_name) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
-            result.height += effective_row_height;
 
-            // If parent is expanded recursively — render as a nested card.
             const std::string parent_key = path_prefix + "parent/" + std::to_string(pi);
-            if (parent && is_nested_expanded(nested_expanded, parent_key)
+            const bool is_expanded = parent
+                && is_nested_expanded(nested_expanded, parent_key)
                 && visited.find(parent->id) == visited.end()
-                && depth + 1 < max_nesting_depth)
-            {
+                && depth + 1 < max_nesting_depth;
+
+            if (is_expanded) {
+                // Expanded: row merges into card — no separate row, card shown directly.
                 visited.insert(parent->id);
-                result.height += effective_group_vertical_gap;
                 result.height += nested_header_height;
                 result.height += nested_card_content_inset_top;
                 ContentSize nested = compute_class_content_size(
@@ -102,9 +100,15 @@ ContentSize compute_class_content_size(
                     component_subproperty_indent);
                 result.height += nested.height;
                 result.height += nested_card_content_inset_bottom;
+                // Card header width: name + buttons.
+                track_text_w(measure_text_width(parent_name) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
                 result.max_text_width = std::max(result.max_text_width,
                     nested.max_text_width + 2.0 * nested_card_pad_x);
                 visited.erase(parent->id);
+            } else {
+                // Collapsed: show row with name + buttons.
+                track_text_w(measure_text_width(parent_name) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
+                result.height += effective_row_height;
             }
 
             if (pi + 1 < cls.parent_class_ids.size())
@@ -175,31 +179,33 @@ ContentSize compute_class_content_size(
             const char* type_name = child_class ? child_class->type_name.c_str() : co.class_id.c_str();
             std::string name_part = co.label.empty() ? std::string(type_name) : co.label;
             std::string line = std::string(type_name) + ": " + name_part;
-            // Child row (+ space for nav button + expand button)
-            track_text_w(measure_text_width(line.c_str()) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
-            result.height += effective_row_height;
 
-            // If child is expanded recursively — render as a nested card.
             const std::string child_key = path_prefix + "child/" + std::to_string(i);
-            if (child_class && is_nested_expanded(nested_expanded, child_key)
+            const bool is_expanded = child_class
+                && is_nested_expanded(nested_expanded, child_key)
                 && visited.find(child_class->id) == visited.end()
-                && depth + 1 < max_nesting_depth)
-            {
+                && depth + 1 < max_nesting_depth;
+
+            if (is_expanded) {
+                // Expanded: row merges into card.
                 visited.insert(child_class->id);
-                result.height += effective_group_vertical_gap;       // gap before card
-                result.height += nested_header_height;               // card header bar
-                result.height += nested_card_content_inset_top;      // top inset inside card
+                result.height += nested_header_height;
+                result.height += nested_card_content_inset_top;
                 ContentSize nested = compute_class_content_size(
                     diagram, *child_class, child_key + "/", nested_expanded,
                     visited, depth + 1, effective_row_height,
                     effective_row_inner_gap, effective_group_vertical_gap,
                     component_subproperty_indent);
                 result.height += nested.height;
-                result.height += nested_card_content_inset_bottom;   // bottom inset inside card
-                // Card needs: nested content width + card padding on both sides.
+                result.height += nested_card_content_inset_bottom;
+                track_text_w(measure_text_width(line.c_str()) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
                 result.max_text_width = std::max(result.max_text_width,
                     nested.max_text_width + 2.0 * nested_card_pad_x);
                 visited.erase(child_class->id);
+            } else {
+                // Collapsed: show row.
+                track_text_w(measure_text_width(line.c_str()) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
+                result.height += effective_row_height;
             }
 
             if (i + 1 < cls.child_objects.size())

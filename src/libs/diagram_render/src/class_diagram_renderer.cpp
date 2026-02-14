@@ -191,9 +191,13 @@ struct NestedCardColors {
 // Caller provides exact card bounds (no internal padding applied here).
 // Uses draw list channels: card background/header on channel 0,
 // border + header text on channel 1 (so they render on top of row backgrounds).
+// Draw a nested card frame. If collapse_key is non-empty, draw collapse [-] and nav [->] buttons on the header.
 void draw_nested_card(const RenderContext& ctx,
     float card_left, float card_top, float card_right, float card_bottom,
-    const char* class_name, const NestedCardColors& colors)
+    const char* class_name, const NestedCardColors& colors,
+    const std::string& block_class_id = {},
+    const std::string& collapse_key = {},
+    const std::string& nav_target_class_id = {})
 {
     const float card_rounding = 6.0f;
     const float border_thickness = 2.0f;
@@ -206,31 +210,42 @@ void draw_nested_card(const RenderContext& ctx,
     // --- Channel 0: card background + header bg (behind row content) ---
     ctx.draw_list->ChannelsSetCurrent(0);
 
-    // Card body background.
     ctx.draw_list->AddRectFilled(cmin, cmax, colors.bg, card_rounding);
 
-    // Header bar background (top portion with rounded top corners).
     ImVec2 hdr_max = world_to_screen(card_right, header_bottom, ctx.offset_x, ctx.offset_y, ctx.zoom);
     ctx.draw_list->AddRectFilled(cmin, hdr_max, colors.header_bg, card_rounding,
         ImDrawFlags_RoundCornersTop);
 
-    // --- Channel 1: border + header text + separator (on top of row content) ---
+    // --- Channel 1: border + header text + separator + buttons (on top of row content) ---
     ctx.draw_list->ChannelsSetCurrent(1);
 
-    // Card border.
     ctx.draw_list->AddRect(cmin, cmax, colors.border, card_rounding, 0, border_thickness);
 
-    // Separator line under header.
     ImVec2 sep_left = world_to_screen(card_left, header_bottom, ctx.offset_x, ctx.offset_y, ctx.zoom);
     ImVec2 sep_right = world_to_screen(card_right, header_bottom, ctx.offset_x, ctx.offset_y, ctx.zoom);
     ctx.draw_list->AddLine(sep_left, sep_right, colors.border, 1.0f);
 
-    // Header class name text.
     const float text_pad = 6.0f;
     const float text_y = card_top + (f_header_h - ctx.font_world_height) * 0.5f;
     ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
         world_to_screen(card_left + text_pad, text_y, ctx.offset_x, ctx.offset_y, ctx.zoom),
         ctx.text_color, class_name);
+
+    // Collapse [-] button on card header (right side).
+    if (!collapse_key.empty()) {
+        const float btn_x = card_right - text_pad - ctx.f_nested_button_size;
+        const float btn_y = card_top + (f_header_h - ctx.f_nested_button_size) * 0.5f;
+        draw_nested_button(ctx, btn_x, btn_y, true); // always shows [-] since it's expanded
+        record_hit_button(ctx, block_class_id, collapse_key, btn_x, btn_y);
+
+        // Nav [->] button to the left of collapse button.
+        if (!nav_target_class_id.empty()) {
+            const float nav_x = btn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
+            const float nav_y = card_top + (f_header_h - ctx.f_nav_button_size) * 0.5f;
+            draw_nav_button(ctx, nav_x, nav_y);
+            record_nav_button(ctx, nav_target_class_id, nav_x, nav_y);
+        }
+    }
 }
 
 // Recursively render the 4 content sections (Parent, Properties, Components, Children)
@@ -336,55 +351,19 @@ float render_class_content(
     }
     if (!cls.parent_class_ids.empty()) {
         for (std::size_t pi = 0; pi < cls.parent_class_ids.size(); ++pi) {
-            const float row_top = cy;
-            draw_row_background(item_left, row_top, ctx.parent_bg, ctx.parent_accent);
             const diagram_model::DiagramClass* parent_cls = find_class(ctx.diagram, cls.parent_class_ids[pi]);
             const char* parent_name = parent_cls
                 ? parent_cls->type_name.c_str() : cls.parent_class_ids[pi].c_str();
-            draw_row_text(row_top, ctx.text_color, parent_name);
 
-            // Nested expand button for parent.
             const std::string parent_key = path_prefix + "parent/" + std::to_string(pi);
             const bool parent_is_cycle = parent_cls && visited.find(parent_cls->id) != visited.end();
             const bool can_expand = parent_cls && !parent_is_cycle
                 && depth + 1 < max_nesting_depth;
-            if (can_expand) {
-                const bool parent_expanded = is_nested_expanded(ctx.nested_expanded, parent_key);
-                const float nbtn_x = content_right - ctx.f_nested_button_size;
-                const float nbtn_y = row_top + (ctx.f_row_height_effective - ctx.f_nested_button_size) * 0.5f;
-                draw_nested_button(ctx, nbtn_x, nbtn_y, parent_expanded);
-                record_hit_button(ctx, block_class_id, parent_key, nbtn_x, nbtn_y);
-                const float nav_x = nbtn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
-                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
-                draw_nav_button(ctx, nav_x, nav_y);
-                record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
-            } else if (parent_is_cycle) {
-                const float cycle_x = content_right - ctx.font->CalcTextSizeA(
-                    ctx.scaled_font_size, FLT_MAX, 0.0f, "(cycle)", nullptr).x / ctx.safe_zoom;
-                ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
-                    world_to_screen(cycle_x, row_text_y(row_top),
-                        ctx.offset_x, ctx.offset_y, ctx.zoom),
-                    ctx.empty_color, "(cycle)");
-            }
-            if (parent_cls && !can_expand) {
-                const float nav_x = content_right - ctx.f_nav_button_size;
-                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
-                draw_nav_button(ctx, nav_x, nav_y);
-                record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
-            }
-            if (parent_cls) {
-                record_hover_region(ctx, parent_cls->id,
-                    item_left, row_top, content_right - item_left, ctx.f_row_height_effective);
-            }
-            cy += ctx.f_row_height_effective;
+            const bool is_expanded = can_expand && is_nested_expanded(ctx.nested_expanded, parent_key);
 
-            // If parent is expanded, render its content as a nested card.
-            if (parent_cls && is_nested_expanded(ctx.nested_expanded, parent_key)
-                && visited.find(parent_cls->id) == visited.end()
-                && depth + 1 < max_nesting_depth)
-            {
+            if (is_expanded) {
+                // Expanded: row transforms into the card directly (no separate row).
                 visited.insert(parent_cls->id);
-                cy += ctx.f_group_vertical_gap_effective;
                 const float card_left = content_x;
                 const float card_right = content_right;
                 const float card_top = cy;
@@ -399,8 +378,46 @@ float render_class_content(
                     ctx.parent_card_bg, ctx.parent_card_border,
                     ctx.parent_card_header_bg };
                 draw_nested_card(ctx, card_left, card_top, card_right, cy,
-                    parent_cls->type_name.c_str(), parent_colors);
+                    parent_name, parent_colors,
+                    block_class_id, parent_key, parent_cls->id);
+                // Hover region covers the card header.
+                record_hover_region(ctx, parent_cls->id,
+                    card_left, card_top, card_right - card_left, static_cast<float>(nested_header_height));
                 visited.erase(parent_cls->id);
+            } else {
+                // Collapsed: draw the row with name + buttons.
+                const float row_top = cy;
+                draw_row_background(item_left, row_top, ctx.parent_bg, ctx.parent_accent);
+                draw_row_text(row_top, ctx.text_color, parent_name);
+
+                if (can_expand) {
+                    const float nbtn_x = content_right - ctx.f_nested_button_size;
+                    const float nbtn_y = row_top + (ctx.f_row_height_effective - ctx.f_nested_button_size) * 0.5f;
+                    draw_nested_button(ctx, nbtn_x, nbtn_y, false);
+                    record_hit_button(ctx, block_class_id, parent_key, nbtn_x, nbtn_y);
+                    const float nav_x = nbtn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
+                    const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                    draw_nav_button(ctx, nav_x, nav_y);
+                    record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
+                } else if (parent_is_cycle) {
+                    const float cycle_x = content_right - ctx.font->CalcTextSizeA(
+                        ctx.scaled_font_size, FLT_MAX, 0.0f, "(cycle)", nullptr).x / ctx.safe_zoom;
+                    ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
+                        world_to_screen(cycle_x, row_text_y(row_top),
+                            ctx.offset_x, ctx.offset_y, ctx.zoom),
+                        ctx.empty_color, "(cycle)");
+                }
+                if (parent_cls && !can_expand) {
+                    const float nav_x = content_right - ctx.f_nav_button_size;
+                    const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                    draw_nav_button(ctx, nav_x, nav_y);
+                    record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
+                }
+                if (parent_cls) {
+                    record_hover_region(ctx, parent_cls->id,
+                        item_left, row_top, content_right - item_left, ctx.f_row_height_effective);
+                }
+                cy += ctx.f_row_height_effective;
             }
 
             if (pi + 1 < cls.parent_class_ids.size())
@@ -488,79 +505,75 @@ float render_class_content(
     if (!cls.child_objects.empty()) {
         for (size_t i = 0; i < cls.child_objects.size(); ++i) {
             const auto& co = cls.child_objects[i];
-            const float row_top = cy;
-            draw_row_background(item_left, row_top, ctx.children_bg, ctx.children_accent);
             const diagram_model::DiagramClass* child_class = find_class(ctx.diagram, co.class_id);
             const char* type_name = child_class
                 ? child_class->type_name.c_str() : co.class_id.c_str();
             const std::string name_part = co.label.empty() ? std::string(type_name) : co.label;
-            draw_typed_row_text(row_top, type_name, name_part);
 
-            // Nested expand button for child object.
             const std::string child_key = path_prefix + "child/" + std::to_string(i);
             const bool child_is_cycle = child_class && visited.find(child_class->id) != visited.end();
             const bool can_expand = child_class && !child_is_cycle
                 && depth + 1 < max_nesting_depth;
-            if (can_expand) {
-                const bool child_expanded = is_nested_expanded(ctx.nested_expanded, child_key);
-                const float nbtn_x = content_right - ctx.f_nested_button_size;
-                const float nbtn_y = row_top + (ctx.f_row_height_effective - ctx.f_nested_button_size) * 0.5f;
-                draw_nested_button(ctx, nbtn_x, nbtn_y, child_expanded);
-                record_hit_button(ctx, block_class_id, child_key, nbtn_x, nbtn_y);
-                // Nav button to the left of expand button.
-                const float nav_x = nbtn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
-                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
-                draw_nav_button(ctx, nav_x, nav_y);
-                record_nav_button(ctx, child_class->id, nav_x, nav_y);
-            } else if (child_is_cycle) {
-                const float cycle_x = content_right - ctx.font->CalcTextSizeA(
-                    ctx.scaled_font_size, FLT_MAX, 0.0f, "(cycle)", nullptr).x / ctx.safe_zoom;
-                ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
-                    world_to_screen(cycle_x, row_text_y(row_top),
-                        ctx.offset_x, ctx.offset_y, ctx.zoom),
-                    ctx.empty_color, "(cycle)");
-            }
-            // Nav button: show even when expand is unavailable, if class exists.
-            if (child_class && !can_expand) {
-                const float nav_x = content_right - ctx.f_nav_button_size;
-                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
-                draw_nav_button(ctx, nav_x, nav_y);
-                record_nav_button(ctx, child_class->id, nav_x, nav_y);
-            }
-            // Hover region: entire child row maps to the child class.
-            if (child_class) {
-                record_hover_region(ctx, child_class->id,
-                    item_left, row_top, content_right - item_left, ctx.f_row_height_effective);
-            }
+            const bool is_expanded = can_expand && is_nested_expanded(ctx.nested_expanded, child_key);
 
-            cy += ctx.f_row_height_effective;
-
-            // If child is expanded, render its content as a nested card.
-            if (child_class && is_nested_expanded(ctx.nested_expanded, child_key)
-                && visited.find(child_class->id) == visited.end()
-                && depth + 1 < max_nesting_depth)
-            {
+            if (is_expanded) {
+                // Expanded: row transforms into the card directly.
                 visited.insert(child_class->id);
-                cy += ctx.f_group_vertical_gap_effective;
-                // Card fills the current content area.
                 const float card_left = content_x;
                 const float card_right = content_right;
                 const float card_top = cy;
-                cy += static_cast<float>(nested_header_height);            // card header
-                cy += static_cast<float>(nested_card_content_inset_top);   // top inset
-                // Inner bounds: content area inside the card border.
+                cy += static_cast<float>(nested_header_height);
+                cy += static_cast<float>(nested_card_content_inset_top);
                 const float inner_left = card_left + static_cast<float>(nested_card_pad_x);
                 const float inner_right = card_right - static_cast<float>(nested_card_pad_x);
                 cy = render_class_content(ctx, *child_class, inner_left, inner_right,
                     cy, depth + 1, child_key + "/", block_class_id, visited);
-                cy += static_cast<float>(nested_card_content_inset_bottom); // bottom inset
-                // Draw the card around everything.
+                cy += static_cast<float>(nested_card_content_inset_bottom);
+                // Card header shows "Type: label" like the collapsed row.
+                std::string card_title = std::string(type_name) + ": " + name_part;
                 const NestedCardColors child_colors {
                     ctx.child_card_bg, ctx.child_card_border,
                     ctx.child_card_header_bg };
                 draw_nested_card(ctx, card_left, card_top, card_right, cy,
-                    child_class->type_name.c_str(), child_colors);
+                    card_title.c_str(), child_colors,
+                    block_class_id, child_key, child_class->id);
+                record_hover_region(ctx, child_class->id,
+                    card_left, card_top, card_right - card_left, static_cast<float>(nested_header_height));
                 visited.erase(child_class->id);
+            } else {
+                // Collapsed: draw the row.
+                const float row_top = cy;
+                draw_row_background(item_left, row_top, ctx.children_bg, ctx.children_accent);
+                draw_typed_row_text(row_top, type_name, name_part);
+
+                if (can_expand) {
+                    const float nbtn_x = content_right - ctx.f_nested_button_size;
+                    const float nbtn_y = row_top + (ctx.f_row_height_effective - ctx.f_nested_button_size) * 0.5f;
+                    draw_nested_button(ctx, nbtn_x, nbtn_y, false);
+                    record_hit_button(ctx, block_class_id, child_key, nbtn_x, nbtn_y);
+                    const float nav_x = nbtn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
+                    const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                    draw_nav_button(ctx, nav_x, nav_y);
+                    record_nav_button(ctx, child_class->id, nav_x, nav_y);
+                } else if (child_is_cycle) {
+                    const float cycle_x = content_right - ctx.font->CalcTextSizeA(
+                        ctx.scaled_font_size, FLT_MAX, 0.0f, "(cycle)", nullptr).x / ctx.safe_zoom;
+                    ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
+                        world_to_screen(cycle_x, row_text_y(row_top),
+                            ctx.offset_x, ctx.offset_y, ctx.zoom),
+                        ctx.empty_color, "(cycle)");
+                }
+                if (child_class && !can_expand) {
+                    const float nav_x = content_right - ctx.f_nav_button_size;
+                    const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                    draw_nav_button(ctx, nav_x, nav_y);
+                    record_nav_button(ctx, child_class->id, nav_x, nav_y);
+                }
+                if (child_class) {
+                    record_hover_region(ctx, child_class->id,
+                        item_left, row_top, content_right - item_left, ctx.f_row_height_effective);
+                }
+                cy += ctx.f_row_height_effective;
             }
 
             if (i + 1 < cls.child_objects.size())
