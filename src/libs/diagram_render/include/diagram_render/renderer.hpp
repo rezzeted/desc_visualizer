@@ -5,6 +5,7 @@
 #include <diagram_render/nested_hit_button.hpp>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 struct ImDrawList;
@@ -33,7 +34,8 @@ void render_class_diagram(ImDrawList* draw_list,
     std::vector<NavHitButton>* out_nav_buttons = nullptr,
     std::vector<ClassHoverRegion>* out_hover_regions = nullptr,
     const std::string& hovered_class_id = {},
-    const std::vector<diagram_placement::ConnectionLine>& connection_lines = {});
+    const std::vector<diagram_placement::ConnectionLine>& connection_lines = {},
+    const std::unordered_set<std::string>& highlighted_class_ids = {});
 
 // Computes block width/height from content using ImGui::CalcTextSize (current font).
 // Call only when ImGui context is active. Returns map class_id -> Rect (width and height set; x,y zero).

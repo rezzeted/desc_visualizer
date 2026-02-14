@@ -587,7 +587,8 @@ void render_class_diagram(ImDrawList* draw_list,
     std::vector<NavHitButton>* out_nav_buttons,
     std::vector<ClassHoverRegion>* out_hover_regions,
     const std::string& hovered_class_id,
-    const std::vector<diagram_placement::ConnectionLine>& connection_lines)
+    const std::vector<diagram_placement::ConnectionLine>& connection_lines,
+    const std::unordered_set<std::string>& highlighted_class_ids)
 {
     if (!draw_list) return;
 
@@ -688,8 +689,10 @@ void render_class_diagram(ImDrawList* draw_list,
             if (cl.kind == diagram_placement::ConnectionKind::SecondaryInheritance)
                 continue; // Drawn later, on top of blocks.
 
-            const bool is_hovered = (!hovered_class_id.empty()) &&
-                (cl.from_class_id == hovered_class_id || cl.to_class_id == hovered_class_id);
+            const bool is_hovered = (!hovered_class_id.empty() &&
+                (cl.from_class_id == hovered_class_id || cl.to_class_id == hovered_class_id))
+                || highlighted_class_ids.count(cl.from_class_id)
+                || highlighted_class_ids.count(cl.to_class_id);
             unsigned int color = (cl.kind == diagram_placement::ConnectionKind::PrimaryInheritance)
                 ? (is_hovered ? primary_inh_hover : primary_inh_color)
                 : (is_hovered ? composition_hover : composition_color);
@@ -894,31 +897,32 @@ void render_class_diagram(ImDrawList* draw_list,
         }
     }
 
-    // --- Hover highlight pass: draw a glow overlay on the hovered block ---
-    if (!hovered_class_id.empty()) {
+    // --- Hover highlight pass: draw a glow overlay on highlighted blocks ---
+    // Combines: single row-hover target + all parent highlights from block hover.
+    if (!hovered_class_id.empty() || !highlighted_class_ids.empty()) {
+        const float glow_pad = 4.0f;
+        const unsigned int glow_color = IM_COL32(100, 180, 255, 50);
+        const unsigned int highlight_fill = IM_COL32(100, 180, 255, 25);
+        const unsigned int highlight_border = IM_COL32(100, 180, 255, 160);
+
         for (const auto& block : placed.blocks) {
-            if (block.class_id != hovered_class_id) continue;
+            const bool match = (block.class_id == hovered_class_id)
+                || (highlighted_class_ids.count(block.class_id) > 0);
+            if (!match) continue;
 
             const float x = static_cast<float>(block.rect.x);
             const float y = static_cast<float>(block.rect.y);
             const float w = static_cast<float>(block.rect.width);
             const float h = static_cast<float>(block.rect.height);
 
-            // Outer glow (slightly larger than block).
-            const float glow_pad = 4.0f;
             ImVec2 glow_min = world_to_screen(x - glow_pad, y - glow_pad, offset_x, offset_y, zoom);
             ImVec2 glow_max = world_to_screen(x + w + glow_pad, y + h + glow_pad, offset_x, offset_y, zoom);
-            const unsigned int glow_color = IM_COL32(100, 180, 255, 50);
             draw_list->AddRectFilled(glow_min, glow_max, glow_color, 12.0f);
 
-            // Inner highlight overlay on the block itself.
             ImVec2 min_pt = world_to_screen(x, y, offset_x, offset_y, zoom);
             ImVec2 max_pt = world_to_screen(x + w, y + h, offset_x, offset_y, zoom);
-            const unsigned int highlight_fill = IM_COL32(100, 180, 255, 25);
-            const unsigned int highlight_border = IM_COL32(100, 180, 255, 160);
             draw_list->AddRectFilled(min_pt, max_pt, highlight_fill, 8.0f);
             draw_list->AddRect(min_pt, max_pt, highlight_border, 8.0f, 0, 2.5f);
-            break;
         }
     }
 }

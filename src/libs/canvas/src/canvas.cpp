@@ -1,5 +1,6 @@
 #include <canvas/canvas.hpp>
 #include <diagram_placement/placer.hpp>
+#include <diagram_placement/class_diagram_layout_constants.hpp>
 #include <diagram_render/renderer.hpp>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/spdlog.h>
@@ -442,8 +443,9 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
             if (physics_layout_.is_settled()) connection_lines_dirty_ = false;
         }
 
-        // Detect hover: check mouse against previously recorded hover regions.
+        // Detect hover: block-level (highlight parents) + row-level (highlight specific target).
         hovered_class_id_.clear();
+        highlighted_class_ids_.clear();
         {
             ImGuiIO& io = ImGui::GetIO();
             ImVec2 mouse = io.MousePos;
@@ -454,9 +456,29 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
             if (mouse_in_region) {
                 double mx, my;
                 screen_to_world(mouse.x, mouse.y, mx, my);
+
+                // Header hover: if mouse is over a block's header, highlight all its parents.
+                constexpr double hdr_h = diagram_placement::layout::header_height;
+                for (const auto& block : displayed.blocks) {
+                    double bx = block.rect.x, by = block.rect.y;
+                    double bw = block.rect.width;
+                    if (mx >= bx && mx <= bx + bw && my >= by && my <= by + hdr_h) {
+                        hovered_class_id_ = block.class_id;
+                        for (const auto& cls : class_diagram_->classes) {
+                            if (cls.id == block.class_id) {
+                                for (const auto& pid : cls.parent_class_ids)
+                                    highlighted_class_ids_.insert(pid);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                // Row-level hover regions: add specific targets to the highlighted set.
                 for (const auto& hr : hover_regions_) {
                     if (mx >= hr.x && mx <= hr.x + hr.w && my >= hr.y && my <= hr.y + hr.h) {
-                        hovered_class_id_ = hr.target_class_id;
+                        highlighted_class_ids_.insert(hr.target_class_id);
                         break;
                     }
                 }
@@ -468,7 +490,7 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
         hover_regions_.clear();
         diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed,
             offset_x_, offset_y_, zoom_, nested_expanded_, &nested_hit_buttons_, &nav_hit_buttons_,
-            &hover_regions_, hovered_class_id_, connection_lines_);
+            &hover_regions_, hovered_class_id_, connection_lines_, highlighted_class_ids_);
     } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
             (double)region_width, (double)region_height);

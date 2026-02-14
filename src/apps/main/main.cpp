@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
 
     ImGui::StyleColorsDark();
 
-    // Load a nice TTF font (replaces the default pixel font for crisp text)
+    // Load a nice TTF font (replaces the default pixel font for crisp text)ee
     ImGuiIO& io_ref = ImGui::GetIO();
     ImFontConfig font_cfg;
     font_cfg.OversampleH = 2;

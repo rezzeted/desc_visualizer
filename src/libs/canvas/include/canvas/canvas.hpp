@@ -63,6 +63,7 @@ private:
     std::vector<diagram_render::NavHitButton> nav_hit_buttons_;
     std::vector<diagram_render::ClassHoverRegion> hover_regions_;
     std::string hovered_class_id_;
+    std::unordered_set<std::string> highlighted_class_ids_;
     std::vector<diagram_placement::ConnectionLine> connection_lines_;
     bool connection_lines_dirty_ = true;
     diagram_placement::PhysicsLayout physics_layout_;
