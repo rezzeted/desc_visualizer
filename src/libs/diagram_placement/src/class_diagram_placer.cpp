@@ -14,6 +14,23 @@ double estimate_text_width(const std::string& s) {
     return std::max(expanded_min_width - 2 * padding, static_cast<double>(s.size()) * 7.0);
 }
 
+std::string format_typed_name_with_default(const std::string& type,
+    const std::string& name,
+    const std::string& default_value)
+{
+    std::string line = type + ": " + name;
+    if (!default_value.empty())
+        line += " = " + default_value;
+    return line;
+}
+
+std::size_t component_row_count(const diagram_model::DiagramClass& c) {
+    std::size_t rows = c.components.size();
+    for (const auto& comp : c.components)
+        rows += comp.properties.size();
+    return rows;
+}
+
 // Inflated rect = BB expanded by margin; we want inflated rects to be at least `gap` apart.
 void inflated_rect(double x, double y, double w, double h, double m,
     double& left, double& top, double& right, double& bottom)
@@ -127,9 +144,15 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                         content_w = std::max(content_w, estimate_text_width(parent_name));
                     }
                     for (const auto& p : c.properties)
-                        content_w = std::max(content_w, estimate_text_width(p.type + ": " + p.name));
-                    for (const auto& comp : c.components)
+                        content_w = std::max(content_w, estimate_text_width(
+                            format_typed_name_with_default(p.type, p.name, p.default_value)));
+                    for (const auto& comp : c.components) {
                         content_w = std::max(content_w, estimate_text_width(comp.type + ": " + comp.name));
+                        for (const auto& p : comp.properties) {
+                            content_w = std::max(content_w, estimate_text_width(
+                                format_typed_name_with_default(p.type, p.name, p.default_value)));
+                        }
+                    }
                     for (const auto& co : c.child_objects) {
                         auto cit = by_id.find(co.class_id);
                         const std::string& type_name = (cit != by_id.end()) ? cit->second->type_name : co.class_id;
@@ -138,10 +161,11 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                     w = content_w + 2 * padding + button_size;
                     h = header_height + content_inset_top;
                     h += header_content_gap;
+                    const std::size_t component_rows = component_row_count(c);
                     h += expanded_content_height(
                         1u,
                         c.properties.size(),
-                        c.components.size(),
+                        component_rows,
                         c.child_objects.size());
                     h += content_inset_bottom;
                 }
@@ -163,9 +187,15 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                     content_w = std::max(content_w, estimate_text_width(parent_name));
                 }
                 for (const auto& p : c.properties)
-                    content_w = std::max(content_w, estimate_text_width(p.type + ": " + p.name));
-                for (const auto& comp : c.components)
+                    content_w = std::max(content_w, estimate_text_width(
+                        format_typed_name_with_default(p.type, p.name, p.default_value)));
+                for (const auto& comp : c.components) {
                     content_w = std::max(content_w, estimate_text_width(comp.type + ": " + comp.name));
+                    for (const auto& p : comp.properties) {
+                        content_w = std::max(content_w, estimate_text_width(
+                            format_typed_name_with_default(p.type, p.name, p.default_value)));
+                    }
+                }
                 for (const auto& co : c.child_objects) {
                     auto cit = by_id.find(co.class_id);
                     const std::string& type_name = (cit != by_id.end()) ? cit->second->type_name : co.class_id;
@@ -174,10 +204,11 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                 w = content_w + 2 * padding + button_size;
                 h = header_height + content_inset_top;
                 h += header_content_gap;
+                const std::size_t component_rows = component_row_count(c);
                 h += expanded_content_height(
                     1u,
                     c.properties.size(),
-                    c.components.size(),
+                    component_rows,
                     c.child_objects.size());
                 h += content_inset_bottom;
             }

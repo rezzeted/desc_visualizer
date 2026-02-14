@@ -8,11 +8,13 @@ namespace diagram_model {
 struct Property {
     std::string name;
     std::string type;
+    std::string default_value;
 };
 
 struct Component {
     std::string name;
     std::string type;
+    std::vector<Property> properties;
 };
 
 struct ChildObject {

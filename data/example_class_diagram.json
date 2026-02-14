@@ -1,35 +1,722 @@
 {
-  "name": "App classes",
+  "name": "RPG roguelike classes",
+  "canvas_width": 2600,
+  "canvas_height": 1600,
   "classes": [
     {
-      "id": "Entity",
-      "type_name": "Entity",
+      "id": "GameObject",
+      "type_name": "GameObject",
       "parent_class_id": null,
-      "x": 50,
-      "y": 20,
-      "properties": [{"name": "id", "type": "int"}],
-      "components": [{"name": "transform", "type": "Transform"}],
+      "x": 60,
+      "y": 40,
+      "properties": [
+        {"name": "id", "type": "int", "default_value": "0"},
+        {"name": "name", "type": "string", "default_value": ""},
+        {"name": "enabled", "type": "bool", "default_value": "true"}
+      ],
+      "components": [
+        {
+          "name": "transform",
+          "type": "Transform",
+          "properties": [
+            {"name": "x", "type": "float", "default_value": "0.0"},
+            {"name": "y", "type": "float", "default_value": "0.0"},
+            {"name": "rotation", "type": "float", "default_value": "0.0"}
+          ]
+        },
+        {
+          "name": "tag",
+          "type": "TagComponent",
+          "properties": [{"name": "tag", "type": "string", "default_value": ""}]
+        }
+      ],
       "child_objects": []
     },
     {
-      "id": "Node",
-      "type_name": "Node",
-      "parent_class_id": "Entity",
-      "x": 50,
-      "y": 120,
-      "properties": [{"name": "name", "type": "string"}],
-      "components": [{"name": "mesh", "type": "MeshComponent"}],
-      "child_objects": [{"class_id": "Widget", "label": "ui"}]
+      "id": "Entity",
+      "type_name": "Entity",
+      "parent_class_id": "GameObject",
+      "x": 60,
+      "y": 180,
+      "properties": [
+        {"name": "active", "type": "bool", "default_value": "true"},
+        {"name": "layer", "type": "int", "default_value": "0"},
+        {"name": "zIndex", "type": "int", "default_value": "0"}
+      ],
+      "components": [
+        {
+          "name": "sprite",
+          "type": "SpriteRenderer",
+          "properties": [
+            {"name": "spriteSheet", "type": "string", "default_value": ""},
+            {"name": "frameWidth", "type": "int", "default_value": "32"},
+            {"name": "frameHeight", "type": "int", "default_value": "32"}
+          ]
+        },
+        {
+          "name": "collision",
+          "type": "CollisionBox",
+          "properties": [
+            {"name": "width", "type": "float", "default_value": "1.0"},
+            {"name": "height", "type": "float", "default_value": "1.0"}
+          ]
+        }
+      ],
+      "child_objects": []
     },
     {
-      "id": "Widget",
-      "type_name": "Widget",
+      "id": "Character",
+      "type_name": "Character",
       "parent_class_id": "Entity",
-      "x": 280,
-      "y": 20,
-      "properties": [{"name": "visible", "type": "bool"}],
-      "components": [],
-      "child_objects": [{"class_id": "View", "label": "content"}]
+      "x": 60,
+      "y": 320,
+      "properties": [
+        {"name": "health", "type": "int", "default_value": "100"},
+        {"name": "maxHealth", "type": "int", "default_value": "100"},
+        {"name": "speed", "type": "float", "default_value": "1.0"},
+        {"name": "level", "type": "int", "default_value": "1"}
+      ],
+      "components": [
+        {
+          "name": "stats",
+          "type": "StatsComponent",
+          "properties": [
+            {"name": "strength", "type": "int", "default_value": "10"},
+            {"name": "dexterity", "type": "int", "default_value": "10"},
+            {"name": "intelligence", "type": "int", "default_value": "10"}
+          ]
+        },
+        {
+          "name": "animation",
+          "type": "AnimationController",
+          "properties": [{"name": "defaultAnim", "type": "string", "default_value": "idle"}]
+        }
+      ],
+      "child_objects": [{"class_id": "HealthBar", "label": "statusBar"}]
+    },
+    {
+      "id": "Player",
+      "type_name": "Player",
+      "parent_class_id": "Character",
+      "x": 60,
+      "y": 460,
+      "properties": [
+        {"name": "experience", "type": "int", "default_value": "0"},
+        {"name": "playerName", "type": "string", "default_value": "Hero"},
+        {"name": "classType", "type": "string", "default_value": "warrior"}
+      ],
+      "components": [
+        {
+          "name": "input",
+          "type": "InputController",
+          "properties": [{"name": "moveSpeed", "type": "float", "default_value": "5.0"}]
+        },
+        {
+          "name": "camera",
+          "type": "CameraFollow",
+          "properties": [
+            {"name": "smoothing", "type": "float", "default_value": "0.1"},
+            {"name": "offset", "type": "float", "default_value": "0.0"}
+          ]
+        },
+        {
+          "name": "xp",
+          "type": "ExperienceTracker",
+          "properties": [{"name": "levelUpThreshold", "type": "int", "default_value": "100"}]
+        }
+      ],
+      "child_objects": [
+        {"class_id": "Container", "label": "inventory"},
+        {"class_id": "HealthBar", "label": "playerHud"}
+      ]
+    },
+    {
+      "id": "Enemy",
+      "type_name": "Enemy",
+      "parent_class_id": "Character",
+      "x": 300,
+      "y": 460,
+      "properties": [
+        {"name": "aggroRadius", "type": "float", "default_value": "5.0"},
+        {"name": "expReward", "type": "int", "default_value": "10"},
+        {"name": "lootChance", "type": "float", "default_value": "0.5"}
+      ],
+      "components": [
+        {
+          "name": "ai",
+          "type": "AIController",
+          "properties": [{"name": "behaviorTree", "type": "string", "default_value": "default_ai"}]
+        },
+        {
+          "name": "aggro",
+          "type": "AggroSensor",
+          "properties": [{"name": "checkInterval", "type": "float", "default_value": "0.5"}]
+        }
+      ],
+      "child_objects": [{"class_id": "Container", "label": "lootContainer"}]
+    },
+    {
+      "id": "MeleeEnemy",
+      "type_name": "MeleeEnemy",
+      "parent_class_id": "Enemy",
+      "x": 300,
+      "y": 600,
+      "properties": [
+        {"name": "attackDamage", "type": "int", "default_value": "15"},
+        {"name": "attackRange", "type": "float", "default_value": "1.5"},
+        {"name": "attackSpeed", "type": "float", "default_value": "1.0"}
+      ],
+      "components": [
+        {
+          "name": "melee",
+          "type": "MeleeAttack",
+          "properties": [{"name": "swingArc", "type": "float", "default_value": "90"}]
+        },
+        {
+          "name": "pathfinder",
+          "type": "PathFinder",
+          "properties": [{"name": "algorithm", "type": "string", "default_value": "astar"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "RangedEnemy",
+      "type_name": "RangedEnemy",
+      "parent_class_id": "Enemy",
+      "x": 520,
+      "y": 600,
+      "properties": [
+        {"name": "projectileType", "type": "string", "default_value": "arrow"},
+        {"name": "fireRate", "type": "float", "default_value": "1.0"},
+        {"name": "range", "type": "float", "default_value": "8.0"}
+      ],
+      "components": [
+        {
+          "name": "ranged",
+          "type": "RangedAttack",
+          "properties": [{"name": "accuracy", "type": "float", "default_value": "0.8"}]
+        },
+        {
+          "name": "spawner",
+          "type": "ProjectileSpawner",
+          "properties": [{"name": "poolSize", "type": "int", "default_value": "10"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "NPC",
+      "type_name": "NPC",
+      "parent_class_id": "Character",
+      "x": 520,
+      "y": 460,
+      "properties": [
+        {"name": "dialogue", "type": "string", "default_value": ""},
+        {"name": "shopEnabled", "type": "bool", "default_value": "false"},
+        {"name": "questId", "type": "string", "default_value": ""}
+      ],
+      "components": [
+        {
+          "name": "dialogueSystem",
+          "type": "DialogueSystem",
+          "properties": [{"name": "bubbleOffset", "type": "float", "default_value": "1.5"}]
+        },
+        {
+          "name": "questGiver",
+          "type": "QuestGiver",
+          "properties": [{"name": "questPool", "type": "string", "default_value": "main"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Item",
+      "type_name": "Item",
+      "parent_class_id": "Entity",
+      "x": 740,
+      "y": 320,
+      "properties": [
+        {"name": "stackable", "type": "bool", "default_value": "false"},
+        {"name": "maxStack", "type": "int", "default_value": "1"},
+        {"name": "rarity", "type": "string", "default_value": "common"},
+        {"name": "value", "type": "int", "default_value": "0"},
+        {"name": "weight", "type": "float", "default_value": "0.1"}
+      ],
+      "components": [
+        {
+          "name": "pickup",
+          "type": "PickupTrigger",
+          "properties": [{"name": "radius", "type": "float", "default_value": "0.5"}]
+        },
+        {
+          "name": "icon",
+          "type": "ItemIcon",
+          "properties": [{"name": "iconId", "type": "string", "default_value": "default_item"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Weapon",
+      "type_name": "Weapon",
+      "parent_class_id": "Item",
+      "x": 740,
+      "y": 460,
+      "properties": [
+        {"name": "damage", "type": "int", "default_value": "5"},
+        {"name": "attackSpeed", "type": "float", "default_value": "1.0"},
+        {"name": "durability", "type": "int", "default_value": "100"},
+        {"name": "damageType", "type": "string", "default_value": "physical"}
+      ],
+      "components": [
+        {
+          "name": "damageDealer",
+          "type": "DamageDealer",
+          "properties": [{"name": "critChance", "type": "float", "default_value": "0.05"}]
+        },
+        {
+          "name": "durabilityTracker",
+          "type": "DurabilityTracker",
+          "properties": [{"name": "degradeRate", "type": "float", "default_value": "1.0"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Sword",
+      "type_name": "Sword",
+      "parent_class_id": "Weapon",
+      "x": 740,
+      "y": 600,
+      "properties": [
+        {"name": "slashDamage", "type": "int", "default_value": "8"},
+        {"name": "parryChance", "type": "float", "default_value": "0.15"}
+      ],
+      "components": [
+        {
+          "name": "swing",
+          "type": "MeleeSwing",
+          "properties": [{"name": "range", "type": "float", "default_value": "1.2"}]
+        },
+        {
+          "name": "block",
+          "type": "BlockHandler",
+          "properties": [{"name": "blockAngle", "type": "float", "default_value": "60"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Bow",
+      "type_name": "Bow",
+      "parent_class_id": "Weapon",
+      "x": 960,
+      "y": 600,
+      "properties": [
+        {"name": "drawSpeed", "type": "float", "default_value": "0.8"},
+        {"name": "projectileSpeed", "type": "float", "default_value": "15.0"},
+        {"name": "ammoType", "type": "string", "default_value": "arrow"}
+      ],
+      "components": [
+        {
+          "name": "launcher",
+          "type": "ProjectileLauncher",
+          "properties": [{"name": "launchOffset", "type": "float", "default_value": "0.5"}]
+        },
+        {
+          "name": "charge",
+          "type": "ChargeSystem",
+          "properties": [{"name": "maxCharge", "type": "float", "default_value": "2.0"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Armor",
+      "type_name": "Armor",
+      "parent_class_id": "Item",
+      "x": 960,
+      "y": 460,
+      "properties": [
+        {"name": "defense", "type": "int", "default_value": "5"},
+        {"name": "slot", "type": "string", "default_value": "chest"},
+        {"name": "resistFire", "type": "int", "default_value": "0"},
+        {"name": "resistIce", "type": "int", "default_value": "0"}
+      ],
+      "components": [
+        {
+          "name": "defenseModifier",
+          "type": "DefenseModifier",
+          "properties": [{"name": "flatReduction", "type": "int", "default_value": "0"}]
+        },
+        {
+          "name": "equipRenderer",
+          "type": "EquipRenderer",
+          "properties": [{"name": "meshOverride", "type": "string", "default_value": ""}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Consumable",
+      "type_name": "Consumable",
+      "parent_class_id": "Item",
+      "x": 1180,
+      "y": 460,
+      "properties": [
+        {"name": "effectDuration", "type": "float", "default_value": "5.0"},
+        {"name": "cooldown", "type": "float", "default_value": "1.0"},
+        {"name": "charges", "type": "int", "default_value": "1"}
+      ],
+      "components": [
+        {
+          "name": "useEffect",
+          "type": "UseEffect",
+          "properties": [{"name": "effectType", "type": "string", "default_value": "instant"}]
+        },
+        {
+          "name": "cooldownTimer",
+          "type": "CooldownTimer",
+          "properties": [{"name": "globalCooldown", "type": "bool", "default_value": "false"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Projectile",
+      "type_name": "Projectile",
+      "parent_class_id": "Entity",
+      "x": 1180,
+      "y": 320,
+      "properties": [
+        {"name": "speed", "type": "float", "default_value": "10.0"},
+        {"name": "lifetime", "type": "float", "default_value": "3.0"},
+        {"name": "damage", "type": "int", "default_value": "5"},
+        {"name": "piercing", "type": "bool", "default_value": "false"}
+      ],
+      "components": [
+        {
+          "name": "velocity",
+          "type": "Velocity",
+          "properties": [{"name": "drag", "type": "float", "default_value": "0"}]
+        },
+        {
+          "name": "lifetimeTimer",
+          "type": "LifetimeTimer",
+          "properties": [{"name": "fadeOut", "type": "bool", "default_value": "true"}]
+        },
+        {
+          "name": "damageOnHit",
+          "type": "DamageOnHit",
+          "properties": [{"name": "knockback", "type": "float", "default_value": "0.5"}]
+        },
+        {
+          "name": "trail",
+          "type": "TrailRenderer",
+          "properties": [{"name": "trailLength", "type": "int", "default_value": "5"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Container",
+      "type_name": "Container",
+      "parent_class_id": "Entity",
+      "x": 1400,
+      "y": 320,
+      "properties": [
+        {"name": "maxSlots", "type": "int", "default_value": "20"},
+        {"name": "maxWeight", "type": "float", "default_value": "50.0"},
+        {"name": "sortable", "type": "bool", "default_value": "true"}
+      ],
+      "components": [
+        {
+          "name": "inventoryGrid",
+          "type": "InventoryGrid",
+          "properties": [{"name": "columns", "type": "int", "default_value": "5"}]
+        },
+        {
+          "name": "weightCalc",
+          "type": "WeightCalculator",
+          "properties": [{"name": "encumbranceThreshold", "type": "float", "default_value": "40.0"}]
+        }
+      ],
+      "child_objects": [{"class_id": "InventorySlot", "label": "slot"}]
+    },
+    {
+      "id": "Tile",
+      "type_name": "Tile",
+      "parent_class_id": "GameObject",
+      "x": 60,
+      "y": 760,
+      "properties": [
+        {"name": "walkable", "type": "bool", "default_value": "true"},
+        {"name": "tileset", "type": "string", "default_value": "dungeon"},
+        {"name": "tileIndex", "type": "int", "default_value": "0"}
+      ],
+      "components": [
+        {
+          "name": "tileRenderer",
+          "type": "TileRenderer",
+          "properties": [{"name": "tileSize", "type": "int", "default_value": "16"}]
+        },
+        {
+          "name": "passability",
+          "type": "Passability",
+          "properties": [{"name": "moveCost", "type": "float", "default_value": "1.0"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "FloorTile",
+      "type_name": "FloorTile",
+      "parent_class_id": "Tile",
+      "x": 60,
+      "y": 900,
+      "properties": [
+        {"name": "hasTrap", "type": "bool", "default_value": "false"},
+        {"name": "trapDamage", "type": "int", "default_value": "0"},
+        {"name": "decorationType", "type": "string", "default_value": "none"}
+      ],
+      "components": [
+        {
+          "name": "decoration",
+          "type": "FloorDecoration",
+          "properties": [{"name": "variant", "type": "int", "default_value": "0"}]
+        },
+        {
+          "name": "trap",
+          "type": "TrapTrigger",
+          "properties": [{"name": "triggerChance", "type": "float", "default_value": "1.0"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "WallTile",
+      "type_name": "WallTile",
+      "parent_class_id": "Tile",
+      "x": 300,
+      "y": 900,
+      "properties": [
+        {"name": "destructible", "type": "bool", "default_value": "false"},
+        {"name": "hitPoints", "type": "int", "default_value": "50"},
+        {"name": "blocksSight", "type": "bool", "default_value": "true"}
+      ],
+      "components": [
+        {
+          "name": "wallRenderer",
+          "type": "WallRenderer",
+          "properties": [{"name": "wallType", "type": "string", "default_value": "stone"}]
+        },
+        {
+          "name": "destructibleCmp",
+          "type": "Destructible",
+          "properties": [{"name": "debrisType", "type": "string", "default_value": "rubble"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "DoorTile",
+      "type_name": "DoorTile",
+      "parent_class_id": "Tile",
+      "x": 520,
+      "y": 900,
+      "properties": [
+        {"name": "locked", "type": "bool", "default_value": "false"},
+        {"name": "keyId", "type": "string", "default_value": ""},
+        {"name": "autoClose", "type": "bool", "default_value": "true"}
+      ],
+      "components": [
+        {
+          "name": "doorController",
+          "type": "DoorController",
+          "properties": [{"name": "openSpeed", "type": "float", "default_value": "2.0"}]
+        },
+        {
+          "name": "lockMechanism",
+          "type": "LockMechanism",
+          "properties": [{"name": "lockLevel", "type": "int", "default_value": "1"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "UIElement",
+      "type_name": "UIElement",
+      "parent_class_id": "GameObject",
+      "x": 900,
+      "y": 760,
+      "properties": [
+        {"name": "visible", "type": "bool", "default_value": "true"},
+        {"name": "zOrder", "type": "int", "default_value": "0"},
+        {"name": "anchor", "type": "string", "default_value": "topLeft"},
+        {"name": "opacity", "type": "float", "default_value": "1.0"}
+      ],
+      "components": [
+        {
+          "name": "uiRenderer",
+          "type": "UIRenderer",
+          "properties": [{"name": "blendMode", "type": "string", "default_value": "normal"}]
+        },
+        {
+          "name": "uiLayout",
+          "type": "UILayout",
+          "properties": [{"name": "margin", "type": "float", "default_value": "4.0"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "HealthBar",
+      "type_name": "HealthBar",
+      "parent_class_id": "UIElement",
+      "x": 900,
+      "y": 900,
+      "properties": [
+        {"name": "targetEntity", "type": "string", "default_value": ""},
+        {"name": "barColor", "type": "string", "default_value": "red"},
+        {"name": "showText", "type": "bool", "default_value": "true"}
+      ],
+      "components": [
+        {
+          "name": "barRenderer",
+          "type": "BarRenderer",
+          "properties": [
+            {"name": "barWidth", "type": "float", "default_value": "100"},
+            {"name": "barHeight", "type": "float", "default_value": "10"}
+          ]
+        },
+        {
+          "name": "valueBinding",
+          "type": "ValueBinding",
+          "properties": [{"name": "sourceProperty", "type": "string", "default_value": "health"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "MiniMap",
+      "type_name": "MiniMap",
+      "parent_class_id": "UIElement",
+      "x": 1120,
+      "y": 900,
+      "properties": [
+        {"name": "mapScale", "type": "float", "default_value": "0.1"},
+        {"name": "showEnemies", "type": "bool", "default_value": "true"},
+        {"name": "radius", "type": "int", "default_value": "64"}
+      ],
+      "components": [
+        {
+          "name": "mapRenderer",
+          "type": "MapRenderer",
+          "properties": [{"name": "pixelsPerTile", "type": "int", "default_value": "4"}]
+        },
+        {
+          "name": "fog",
+          "type": "FogOfWar",
+          "properties": [{"name": "revealRadius", "type": "int", "default_value": "5"}]
+        },
+        {
+          "name": "playerMarker",
+          "type": "PlayerMarker",
+          "properties": [{"name": "markerSize", "type": "float", "default_value": "3.0"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "InventorySlot",
+      "type_name": "InventorySlot",
+      "parent_class_id": "UIElement",
+      "x": 1340,
+      "y": 900,
+      "properties": [
+        {"name": "slotIndex", "type": "int", "default_value": "0"},
+        {"name": "acceptType", "type": "string", "default_value": "any"}
+      ],
+      "components": [
+        {
+          "name": "dragDrop",
+          "type": "DragDrop",
+          "properties": [{"name": "snapBack", "type": "bool", "default_value": "true"}]
+        },
+        {
+          "name": "slotRenderer",
+          "type": "SlotRenderer",
+          "properties": [{"name": "slotSize", "type": "float", "default_value": "32"}]
+        },
+        {
+          "name": "tooltip",
+          "type": "TooltipProvider",
+          "properties": [{"name": "delay", "type": "float", "default_value": "0.5"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "SpawnPoint",
+      "type_name": "SpawnPoint",
+      "parent_class_id": "GameObject",
+      "x": 1600,
+      "y": 760,
+      "properties": [
+        {"name": "spawnClass", "type": "string", "default_value": ""},
+        {"name": "spawnRate", "type": "float", "default_value": "5.0"},
+        {"name": "maxSpawns", "type": "int", "default_value": "3"},
+        {"name": "radius", "type": "float", "default_value": "2.0"}
+      ],
+      "components": [
+        {
+          "name": "spawnTimer",
+          "type": "SpawnTimer",
+          "properties": [{"name": "jitter", "type": "float", "default_value": "1.0"}]
+        },
+        {
+          "name": "spawnArea",
+          "type": "SpawnArea",
+          "properties": [{"name": "shape", "type": "string", "default_value": "circle"}]
+        }
+      ],
+      "child_objects": []
+    },
+    {
+      "id": "Level",
+      "type_name": "Level",
+      "parent_class_id": "GameObject",
+      "x": 1820,
+      "y": 760,
+      "properties": [
+        {"name": "width", "type": "int", "default_value": "64"},
+        {"name": "height", "type": "int", "default_value": "64"},
+        {"name": "difficulty", "type": "int", "default_value": "1"},
+        {"name": "seed", "type": "int", "default_value": "0"}
+      ],
+      "components": [
+        {
+          "name": "levelManager",
+          "type": "LevelManager",
+          "properties": [{"name": "maxRooms", "type": "int", "default_value": "12"}]
+        },
+        {
+          "name": "turnManager",
+          "type": "TurnManager",
+          "properties": [{"name": "turnDelay", "type": "float", "default_value": "0.3"}]
+        },
+        {
+          "name": "fogSystem",
+          "type": "FogOfWarSystem",
+          "properties": [{"name": "defaultVisible", "type": "bool", "default_value": "false"}]
+        }
+      ],
+      "child_objects": [
+        {"class_id": "DoorTile", "label": "entrance"},
+        {"class_id": "DoorTile", "label": "exit"},
+        {"class_id": "SpawnPoint", "label": "spawner"}
+      ]
     }
   ]
 }

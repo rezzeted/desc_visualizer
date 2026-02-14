@@ -6,6 +6,26 @@ namespace diagram_loaders {
 
 namespace {
 
+diagram_model::Property parse_property(const nlohmann::json& p) {
+    diagram_model::Property prop;
+    prop.name = p.contains("name") && p["name"].is_string() ? p["name"].get<std::string>() : "";
+    prop.type = p.contains("type") && p["type"].is_string() ? p["type"].get<std::string>() : "";
+    prop.default_value = p.contains("default_value") && p["default_value"].is_string()
+        ? p["default_value"].get<std::string>() : "";
+    return prop;
+}
+
+diagram_model::Component parse_component(const nlohmann::json& comp) {
+    diagram_model::Component comp_val;
+    comp_val.name = comp.contains("name") && comp["name"].is_string() ? comp["name"].get<std::string>() : "";
+    comp_val.type = comp.contains("type") && comp["type"].is_string() ? comp["type"].get<std::string>() : "";
+    if (comp.contains("properties") && comp["properties"].is_array()) {
+        for (const auto& p : comp["properties"])
+            comp_val.properties.push_back(parse_property(p));
+    }
+    return comp_val;
+}
+
 std::optional<diagram_model::ClassDiagram> parse_class_diagram_json(const nlohmann::json& j) {
     diagram_model::ClassDiagram out;
     if (!j.contains("classes") || !j["classes"].is_array()) return std::nullopt;
@@ -25,20 +45,12 @@ std::optional<diagram_model::ClassDiagram> parse_class_diagram_json(const nlohma
         cl.margin = c.contains("margin") && c["margin"].is_number() ? c["margin"].get<double>() : 8.0;
 
         if (c.contains("properties") && c["properties"].is_array()) {
-            for (const auto& p : c["properties"]) {
-                diagram_model::Property prop;
-                prop.name = p.contains("name") && p["name"].is_string() ? p["name"].get<std::string>() : "";
-                prop.type = p.contains("type") && p["type"].is_string() ? p["type"].get<std::string>() : "";
-                cl.properties.push_back(std::move(prop));
-            }
+            for (const auto& p : c["properties"])
+                cl.properties.push_back(parse_property(p));
         }
         if (c.contains("components") && c["components"].is_array()) {
-            for (const auto& comp : c["components"]) {
-                diagram_model::Component comp_val;
-                comp_val.name = comp.contains("name") && comp["name"].is_string() ? comp["name"].get<std::string>() : "";
-                comp_val.type = comp.contains("type") && comp["type"].is_string() ? comp["type"].get<std::string>() : "";
-                cl.components.push_back(std::move(comp_val));
-            }
+            for (const auto& comp : c["components"])
+                cl.components.push_back(parse_component(comp));
         }
         if (c.contains("child_objects") && c["child_objects"].is_array()) {
             for (const auto& co : c["child_objects"]) {

@@ -25,6 +25,16 @@ double measure_text_width(const char* text) {
     return static_cast<double>(ImGui::CalcTextSize(text).x);
 }
 
+std::string format_typed_name_with_default(const std::string& type,
+    const std::string& name,
+    const std::string& default_value)
+{
+    std::string line = type + ": " + name;
+    if (!default_value.empty())
+        line += " = " + default_value;
+    return line;
+}
+
 } // namespace
 
 std::unordered_map<std::string, diagram_placement::Rect> compute_class_block_sizes(
@@ -63,12 +73,16 @@ std::unordered_map<std::string, diagram_placement::Rect> compute_class_block_siz
         }
 
         for (const auto& p : c.properties) {
-            std::string line = p.type + ": " + p.name;
+            std::string line = format_typed_name_with_default(p.type, p.name, p.default_value);
             max_text_w = std::max(max_text_w, measure_text_width(line.c_str()));
         }
         for (const auto& comp : c.components) {
             std::string line = comp.type + ": " + comp.name;
             max_text_w = std::max(max_text_w, measure_text_width(line.c_str()));
+            for (const auto& p : comp.properties) {
+                std::string sub_line = format_typed_name_with_default(p.type, p.name, p.default_value);
+                max_text_w = std::max(max_text_w, measure_text_width(sub_line.c_str()));
+            }
         }
         for (const auto& co : c.child_objects) {
             const diagram_model::DiagramClass* child_class = find_class(diagram, co.class_id);
@@ -84,10 +98,13 @@ std::unordered_map<std::string, diagram_placement::Rect> compute_class_block_siz
         r.width = std::max(r.width, 2.0 * padding + button_size);
 
         r.height = header_height + content_inset_top + header_content_gap;
+        std::size_t component_rows = c.components.size();
+        for (const auto& comp : c.components)
+            component_rows += comp.properties.size();
         r.height += expanded_content_height(
             1u,
             c.properties.size(),
-            c.components.size(),
+            component_rows,
             c.child_objects.size());
         r.height += content_inset_bottom;
 

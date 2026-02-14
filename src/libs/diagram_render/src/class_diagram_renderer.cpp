@@ -178,6 +178,27 @@ void render_class_diagram(ImDrawList* draw_list,
                 text_color, name_part.c_str());
         };
 
+        auto draw_property_row_text = [&](float row_top, const diagram_model::Property& p, float extra_indent) {
+            const float text_x = list_text_left + extra_indent;
+            const std::string type_colon = p.type + ": ";
+            draw_list->AddText(font, scaled_font_size,
+                world_to_screen(text_x, row_text_y(row_top), offset_x, offset_y, zoom),
+                type_muted_color, type_colon.c_str());
+
+            const float type_w = font->CalcTextSizeA(scaled_font_size, FLT_MAX, 0.0f, type_colon.c_str(), nullptr).x / safe_zoom;
+            draw_list->AddText(font, scaled_font_size,
+                world_to_screen(text_x + type_w, row_text_y(row_top), offset_x, offset_y, zoom),
+                text_color, p.name.c_str());
+
+            if (!p.default_value.empty()) {
+                const float name_w = font->CalcTextSizeA(scaled_font_size, FLT_MAX, 0.0f, p.name.c_str(), nullptr).x / safe_zoom;
+                const std::string default_text = " = " + p.default_value;
+                draw_list->AddText(font, scaled_font_size,
+                    world_to_screen(text_x + type_w + name_w, row_text_y(row_top), offset_x, offset_y, zoom),
+                    type_muted_color, default_text.c_str());
+            }
+        };
+
         // Group Parent
         {
             const float row_top = cy;
@@ -211,7 +232,7 @@ void render_class_diagram(ImDrawList* draw_list,
                 const auto& p = cl->properties[i];
                 const float row_top = cy;
                 draw_row_background(item_left, row_top, properties_bg, properties_accent);
-                draw_typed_row_text(row_top, p.type, p.name);
+                draw_property_row_text(row_top, p, 0.0f);
                 cy += f_row_height_effective;
                 if (i + 1 < cl->properties.size())
                     cy += f_row_inner_gap_effective;
@@ -238,8 +259,21 @@ void render_class_diagram(ImDrawList* draw_list,
                 draw_row_background(item_left, row_top, components_bg, components_accent);
                 draw_typed_row_text(row_top, comp.type, comp.name);
                 cy += f_row_height_effective;
-                if (i + 1 < cl->components.size())
+
+                if (!comp.properties.empty() || i + 1 < cl->components.size())
                     cy += f_row_inner_gap_effective;
+
+                const float sub_item_left = item_left + f_content_indent * 2.0f;
+                const float sub_text_indent = f_content_indent * 2.0f;
+                for (size_t j = 0; j < comp.properties.size(); ++j) {
+                    const auto& p = comp.properties[j];
+                    const float sub_row_top = cy;
+                    draw_row_background(sub_item_left, sub_row_top, components_bg, components_accent);
+                    draw_property_row_text(sub_row_top, p, sub_text_indent);
+                    cy += f_row_height_effective;
+                    if (j + 1 < comp.properties.size() || i + 1 < cl->components.size())
+                        cy += f_row_inner_gap_effective;
+                }
             }
         } else {
             const float row_top = cy;
