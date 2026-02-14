@@ -34,6 +34,24 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# Box2D (physics)
+FetchContent_Declare(
+    box2d
+    GIT_REPOSITORY "https://github.com/erincatto/box2d.git"
+    GIT_TAG "v3.1.0"
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(box2d)
+
+# spdlog (logging)
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY "https://github.com/gabime/spdlog.git"
+    GIT_TAG "v1.14.1"
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(spdlog)
+
 # ImGui static library with SDL3 + OpenGL3 backends
 add_library(imgui_impl STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp

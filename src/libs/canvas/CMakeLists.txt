@@ -10,4 +10,5 @@ target_link_libraries(canvas PUBLIC
     diagram_placement
     diagram_model
     imgui_impl
+    spdlog::spdlog
 )

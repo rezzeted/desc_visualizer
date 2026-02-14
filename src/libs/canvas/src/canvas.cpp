@@ -1,15 +1,130 @@
 #include <canvas/canvas.hpp>
 #include <diagram_placement/placer.hpp>
-#include <diagram_placement/class_diagram_placement.hpp>
 #include <diagram_render/renderer.hpp>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
 #include "imgui.h"
 #include <cmath>
+#include <filesystem>
+#include <memory>
+#include <vector>
 
 namespace {
 
 const float class_button_size = 20.0f;
 const float class_padding = 8.0f;
 const float class_header_height = 28.0f;
+
+struct Obb {
+    double cx = 0.0;
+    double cy = 0.0;
+    double ex = 0.0;
+    double ey = 0.0;
+    double angle = 0.0;
+};
+
+std::filesystem::path find_project_root() {
+    std::filesystem::path p = std::filesystem::current_path();
+    for (int i = 0; i < 8; ++i) {
+        if (std::filesystem::exists(p / "CMakeLists.txt") && std::filesystem::exists(p / "src")) {
+            return p;
+        }
+        if (!p.has_parent_path()) break;
+        p = p.parent_path();
+    }
+    return std::filesystem::current_path();
+}
+
+std::shared_ptr<spdlog::logger> overlap_logger() {
+    static std::shared_ptr<spdlog::logger> logger;
+    if (logger) return logger;
+
+    try {
+        const std::filesystem::path logs_dir = find_project_root() / "logs";
+        std::filesystem::create_directories(logs_dir);
+        const std::filesystem::path log_file = logs_dir / "diagram_overlap_latest.log";
+        logger = spdlog::basic_logger_mt("diagram_overlap_logger", log_file.string(), true);
+        logger->set_level(spdlog::level::info);
+        logger->flush_on(spdlog::level::info);
+        logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] %v");
+        logger->info("Overlap logger initialized. file={}", log_file.string());
+    } catch (const spdlog::spdlog_ex&) {
+        logger = spdlog::default_logger();
+    }
+    return logger;
+}
+
+Obb to_obb(const diagram_placement::Rect& r) {
+    Obb o;
+    o.cx = r.x + r.width * 0.5;
+    o.cy = r.y + r.height * 0.5;
+    o.ex = r.width * 0.5;
+    o.ey = r.height * 0.5;
+    o.angle = 0.0;
+    return o;
+}
+
+void obb_axes(const Obb& o, double& ax1x, double& ax1y, double& ax2x, double& ax2y) {
+    const double c = std::cos(o.angle);
+    const double s = std::sin(o.angle);
+    ax1x = c;  ax1y = s;
+    ax2x = -s; ax2y = c;
+}
+
+double projected_radius(const Obb& o, double lx, double ly) {
+    double a1x, a1y, a2x, a2y;
+    obb_axes(o, a1x, a1y, a2x, a2y);
+    const double p1 = std::abs(a1x * lx + a1y * ly) * o.ex;
+    const double p2 = std::abs(a2x * lx + a2y * ly) * o.ey;
+    return p1 + p2;
+}
+
+bool obb_intersects(const Obb& a, const Obb& b) {
+    const double dx = b.cx - a.cx;
+    const double dy = b.cy - a.cy;
+    double a1x, a1y, a2x, a2y, b1x, b1y, b2x, b2y;
+    obb_axes(a, a1x, a1y, a2x, a2y);
+    obb_axes(b, b1x, b1y, b2x, b2y);
+
+    const std::vector<std::pair<double, double>> axes = {
+        {a1x, a1y}, {a2x, a2y}, {b1x, b1y}, {b2x, b2y}
+    };
+    for (const auto& axis : axes) {
+        const double lx = axis.first;
+        const double ly = axis.second;
+        const double dist = std::abs(dx * lx + dy * ly);
+        const double ra = projected_radius(a, lx, ly);
+        const double rb = projected_radius(b, lx, ly);
+        if (dist > ra + rb) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::string pair_key(const std::string& a, const std::string& b) {
+    if (a < b) return a + "|" + b;
+    return b + "|" + a;
+}
+
+bool pick_block_at(const diagram_placement::PlacedClassDiagram& placed,
+    double wx,
+    double wy,
+    std::string& out_id,
+    diagram_placement::Rect& out_rect)
+{
+    for (auto it = placed.blocks.rbegin(); it != placed.blocks.rend(); ++it) {
+        const auto& b = *it;
+        if (wx >= b.rect.x && wx <= b.rect.x + b.rect.width &&
+            wy >= b.rect.y && wy <= b.rect.y + b.rect.height)
+        {
+            out_id = b.class_id;
+            out_rect = b.rect;
+            return true;
+        }
+    }
+    return false;
+}
 
 } // namespace
 
@@ -29,6 +144,37 @@ const diagram_model::Diagram* DiagramCanvas::diagram() const {
 
 void DiagramCanvas::set_class_diagram(const diagram_model::ClassDiagram* class_diagram) {
     class_diagram_ = class_diagram;
+    dragging_block_ = false;
+    dragged_block_id_.clear();
+    active_overlap_pairs_.clear();
+    settle_error_reported_ = false;
+    if (!class_diagram_) return;
+
+    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+    physics_layout_.build(*class_diagram_, class_expanded_, &block_sizes);
+}
+
+bool DiagramCanvas::set_class_block_expanded(const std::string& class_id, bool expanded) {
+    if (!class_diagram_) return false;
+    bool found = false;
+    for (const auto& c : class_diagram_->classes) {
+        if (c.id == class_id) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) return false;
+
+    class_expanded_[class_id] = expanded;
+    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+    auto it = block_sizes.find(class_id);
+    if (it != block_sizes.end()) {
+        physics_layout_.update_block_size(class_id, it->second.width, it->second.height, expanded);
+    } else {
+        physics_layout_.build(*class_diagram_, class_expanded_, &block_sizes);
+    }
+    settle_error_reported_ = false;
+    return true;
 }
 
 const diagram_model::ClassDiagram* DiagramCanvas::class_diagram() const {
@@ -104,21 +250,23 @@ void DiagramCanvas::draw_grid(ImVec2 region_min, ImVec2 region_max) {
 
 bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
     if (!class_diagram_) return false;
-    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
-    std::unordered_map<std::string, diagram_placement::Rect> current_rects;
-    class_rect_animator_.get_current_rects(current_rects);
-    diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_, &block_sizes, &current_rects);
-    for (const auto& block : placed.blocks)
-        class_rect_animator_.set_target(block.class_id, block.rect);
+    diagram_placement::PlacedClassDiagram placed = physics_layout_.get_placed();
     double wx, wy;
     screen_to_world(screen_x, screen_y, wx, wy);
     for (const auto& block : placed.blocks) {
-        diagram_placement::Rect cur = class_rect_animator_.get_current(block.class_id);
+        const auto& cur = block.rect;
         double btn_x = cur.x + cur.width - class_padding - class_button_size;
         double btn_y = cur.y + (class_header_height - class_button_size) * 0.5;
         if (wx >= btn_x && wx <= btn_x + class_button_size && wy >= btn_y && wy <= btn_y + class_button_size) {
             bool& exp = class_expanded_[block.class_id];
             exp = !exp;
+            auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+            auto it = block_sizes.find(block.class_id);
+            if (it != block_sizes.end()) {
+                physics_layout_.update_block_size(block.class_id, it->second.width, it->second.height, exp);
+            } else {
+                physics_layout_.build(*class_diagram_, class_expanded_, &block_sizes);
+            }
             return true;
         }
     }
@@ -134,18 +282,72 @@ void DiagramCanvas::handle_input(float region_width, float region_height) {
     bool in_region = mouse.x >= win_min.x && mouse.x <= win_max.x &&
                      mouse.y >= win_min.y && mouse.y <= win_max.y;
 
+    double wx = 0.0;
+    double wy = 0.0;
+    screen_to_world(mouse.x, mouse.y, wx, wy);
+
     if (ImGui::IsMouseClicked(0) && in_region) {
         if (try_toggle_class_expanded(mouse.x, mouse.y))
             return;
+
+        if (class_diagram_ && io.KeyAlt) {
+            std::string hit_id;
+            diagram_placement::Rect hit_rect;
+            auto placed = physics_layout_.get_placed();
+            if (pick_block_at(placed, wx, wy, hit_id, hit_rect)) {
+                dragging_block_ = true;
+                dragged_block_id_ = hit_id;
+                dragged_block_offset_x_ = wx - hit_rect.x;
+                dragged_block_offset_y_ = wy - hit_rect.y;
+                physics_layout_.begin_drag(hit_id);
+                dragging_ = false;
+                return;
+            }
+        }
+
         dragging_ = true;
         drag_start_x_ = mouse.x;
         drag_start_y_ = mouse.y;
         drag_start_offset_x_ = offset_x_;
         drag_start_offset_y_ = offset_y_;
     }
+
+    if (ImGui::IsMouseClicked(1) && in_region && class_diagram_) {
+        std::string hit_id;
+        diagram_placement::Rect hit_rect;
+        auto placed = physics_layout_.get_placed();
+        if (pick_block_at(placed, wx, wy, hit_id, hit_rect)) {
+            dragging_block_ = true;
+            dragged_block_id_ = hit_id;
+            dragged_block_offset_x_ = wx - hit_rect.x;
+            dragged_block_offset_y_ = wy - hit_rect.y;
+            physics_layout_.begin_drag(hit_id);
+            dragging_ = false;
+        }
+    }
+
     if (ImGui::IsMouseReleased(0)) {
         dragging_ = false;
+        if (dragging_block_) {
+            physics_layout_.end_drag(dragged_block_id_);
+            dragging_block_ = false;
+            dragged_block_id_.clear();
+        }
     }
+    if (ImGui::IsMouseReleased(1) && dragging_block_) {
+        physics_layout_.end_drag(dragged_block_id_);
+        dragging_block_ = false;
+        dragged_block_id_.clear();
+    }
+
+    if (dragging_block_ && !dragged_block_id_.empty()) {
+        physics_layout_.drag_to(
+            dragged_block_id_,
+            wx - dragged_block_offset_x_,
+            wy - dragged_block_offset_y_);
+        return;
+    }
+
     if (dragging_) {
         offset_x_ = drag_start_offset_x_ + (mouse.x - drag_start_x_);
         offset_y_ = drag_start_offset_y_ + (mouse.y - drag_start_y_);
@@ -173,22 +375,9 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
     draw_grid(region_min, region_max);
 
     if (class_diagram_) {
-        auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
-        std::unordered_map<std::string, diagram_placement::Rect> current_rects;
-        class_rect_animator_.get_current_rects(current_rects);
-        diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_, &block_sizes, &current_rects);
-        for (const auto& block : placed.blocks)
-            class_rect_animator_.set_target(block.class_id, block.rect);
-        class_rect_animator_.tick(ImGui::GetIO().DeltaTime);
-        diagram_placement::PlacedClassDiagram displayed;
-        for (const auto& block : placed.blocks) {
-            diagram_placement::PlacedClassBlock b;
-            b.class_id = block.class_id;
-            b.rect = class_rect_animator_.get_current(block.class_id);
-            b.margin = block.margin;
-            b.expanded = block.expanded;
-            displayed.blocks.push_back(b);
-        }
+        physics_layout_.step(ImGui::GetIO().DeltaTime);
+        diagram_placement::PlacedClassDiagram displayed = physics_layout_.get_placed();
+        log_visual_overlaps(displayed);
         diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed, offset_x_, offset_y_, zoom_);
     } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
@@ -197,6 +386,59 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
     }
 
     return true;
+}
+
+void DiagramCanvas::log_visual_overlaps(const diagram_placement::PlacedClassDiagram& displayed) {
+    auto logger = overlap_logger();
+    std::unordered_set<std::string> current_pairs;
+
+    for (std::size_t i = 0; i < displayed.blocks.size(); ++i) {
+        const auto& a = displayed.blocks[i];
+        const Obb obb_a = to_obb(a.rect);
+        for (std::size_t j = i + 1; j < displayed.blocks.size(); ++j) {
+            const auto& b = displayed.blocks[j];
+            const Obb obb_b = to_obb(b.rect);
+            if (!obb_intersects(obb_a, obb_b)) {
+                continue;
+            }
+
+            const std::string key = pair_key(a.class_id, b.class_id);
+            current_pairs.insert(key);
+            if (active_overlap_pairs_.find(key) == active_overlap_pairs_.end()) {
+                logger->warn(
+                    "overlap_detected pair={} a={} b={} "
+                    "a_rect=({}, {}, {}, {}) b_rect=({}, {}, {}, {})",
+                    key, a.class_id, b.class_id,
+                    a.rect.x, a.rect.y, a.rect.width, a.rect.height,
+                    b.rect.x, b.rect.y, b.rect.width, b.rect.height);
+            }
+        }
+    }
+
+    for (const auto& key : active_overlap_pairs_) {
+        if (current_pairs.find(key) == current_pairs.end()) {
+            logger->info("overlap_resolved pair={}", key);
+        }
+    }
+
+    active_overlap_pairs_ = std::move(current_pairs);
+
+    if (physics_layout_.is_settled()) {
+        if (!active_overlap_pairs_.empty() && !settle_error_reported_) {
+            logger->error(
+                "settle_failed overlap_count={} pairs_unresolved={}",
+                active_overlap_pairs_.size(),
+                active_overlap_pairs_.size());
+            for (const auto& pair : active_overlap_pairs_) {
+                logger->error("settle_failed_pair pair={}", pair);
+            }
+            settle_error_reported_ = true;
+        } else if (active_overlap_pairs_.empty()) {
+            settle_error_reported_ = false;
+        }
+    } else {
+        settle_error_reported_ = false;
+    }
 }
 
 } // namespace canvas

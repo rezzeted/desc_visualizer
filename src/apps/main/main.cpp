@@ -13,11 +13,16 @@
 #include <cstdio>
 #include <optional>
 #include <string>
+#include <vector>
 
 int main(int argc, char* argv[])
 {
-    (void)argc;
-    (void)argv;
+    bool auto_overlap_test = false;
+    for (int i = 1; i < argc; ++i) {
+        if (std::string(argv[i]) == "--auto-overlap-test") {
+            auto_overlap_test = true;
+        }
+    }
 
     SDL_SetMainReady();
     // SDL3: SDL_Init returns true on success, false on failure
@@ -114,6 +119,31 @@ int main(int argc, char* argv[])
         diagram_canvas.set_class_diagram(&*class_diagram);
 
     bool running = true;
+    int frame = 0;
+    struct ToggleAction {
+        int frame_index;
+        const char* id;
+        bool expanded;
+    };
+    const std::vector<ToggleAction> auto_actions = {
+        {10, "NPC", true},
+        {35, "UIElement", true},
+        {60, "Bow", true},
+        {85, "Sword", true},
+        {110, "WallTile", true},
+        {150, "NPC", false},
+        {175, "UIElement", false},
+        {200, "Bow", false},
+        {225, "Sword", false},
+        {250, "WallTile", false},
+        {290, "NPC", true},
+        {315, "UIElement", true},
+    };
+    std::size_t next_action = 0;
+    int settled_frames = 0;
+    const int max_test_frames = 1200;
+    int test_exit_code = 0;
+
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -142,6 +172,30 @@ int main(int argc, char* argv[])
         }
         ImGui::End();
 
+        if (auto_overlap_test) {
+            while (next_action < auto_actions.size() && frame >= auto_actions[next_action].frame_index) {
+                diagram_canvas.set_class_block_expanded(auto_actions[next_action].id, auto_actions[next_action].expanded);
+                ++next_action;
+            }
+
+            const bool all_actions_done = next_action >= auto_actions.size();
+            const bool settled = diagram_canvas.is_layout_settled();
+            if (all_actions_done && settled) {
+                ++settled_frames;
+            } else {
+                settled_frames = 0;
+            }
+
+            if (settled_frames >= 30 || frame >= max_test_frames) {
+                const std::size_t overlaps = diagram_canvas.current_overlap_count();
+                (void)fprintf(stderr,
+                    "[auto-overlap-test] finished frame=%d settled=%d overlap_count=%zu\n",
+                    frame, settled ? 1 : 0, overlaps);
+                test_exit_code = overlaps == 0 ? 0 : 2;
+                running = false;
+            }
+        }
+
         ImGui::Render();
         SDL_GL_MakeCurrent(window, gl_context);
         // HiDPI: use framebuffer size in pixels, not logical DisplaySize
@@ -152,6 +206,7 @@ int main(int argc, char* argv[])
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         SDL_GL_SwapWindow(window);
+        ++frame;
     }
 
     ImGui_ImplOpenGL3_Shutdown();
@@ -161,5 +216,8 @@ int main(int argc, char* argv[])
     SDL_GL_DestroyContext(gl_context);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    if (auto_overlap_test) {
+        return test_exit_code;
+    }
     return 0;
 }
