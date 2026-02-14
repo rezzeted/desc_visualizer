@@ -30,6 +30,8 @@ public:
     std::unordered_map<std::string, bool>& nested_expanded() { return nested_expanded_; }
     const std::unordered_map<std::string, bool>& nested_expanded() const { return nested_expanded_; }
 
+    void focus_on_class(const std::string& class_id);
+
     void set_grid_step(float step) { grid_step_ = step; }
     float grid_step() const { return grid_step_; }
 
@@ -57,11 +59,14 @@ private:
     std::unordered_map<std::string, bool> class_expanded_;
     std::unordered_map<std::string, bool> nested_expanded_;
     std::vector<diagram_render::NestedHitButton> nested_hit_buttons_;
+    std::vector<diagram_render::NavHitButton> nav_hit_buttons_;
     diagram_placement::PhysicsLayout physics_layout_;
     float offset_x_ = 0;
     float offset_y_ = 0;
     float zoom_ = 1.0f;
     float grid_step_ = 40.0f;
+    float last_region_width_ = 0;
+    float last_region_height_ = 0;
     bool dragging_ = false;
     float drag_start_x_ = 0;
     float drag_start_y_ = 0;

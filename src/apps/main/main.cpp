@@ -35,8 +35,16 @@ int main(int argc, char* argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 
-    const int window_width = 1280;
-    const int window_height = 720;
+    // Default fallback if display bounds are unavailable.
+    int window_width = 1280;
+    int window_height = 720;
+    {
+        SDL_Rect bounds{};
+        if (SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &bounds)) {
+            window_width = bounds.w * 2 / 3;
+            window_height = bounds.h * 2 / 3;
+        }
+    }
     const SDL_WindowFlags window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
         | SDL_WINDOW_HIGH_PIXEL_DENSITY;  // HiDPI: request native pixel density back buffer
     SDL_Window* window = SDL_CreateWindow("Diagram", window_width, window_height, window_flags);

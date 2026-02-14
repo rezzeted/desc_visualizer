@@ -66,10 +66,11 @@ ContentSize compute_class_content_size(
     double component_subproperty_indent)
 {
     ContentSize result;
-    const double depth_indent = nesting_indent * static_cast<double>(depth);
 
+    // Text widths are relative to this level's content area (no depth offset).
+    // Card padding is added at nesting boundaries when combining widths.
     auto track_text_w = [&](double text_w) {
-        result.max_text_width = std::max(result.max_text_width, depth_indent + text_w);
+        result.max_text_width = std::max(result.max_text_width, text_w);
     };
 
     // --- Parent section ---
@@ -79,25 +80,30 @@ ContentSize compute_class_content_size(
     if (!cls.parent_class_id.empty()) {
         const diagram_model::DiagramClass* parent = find_class(diagram, cls.parent_class_id);
         const char* parent_name = parent ? parent->type_name.c_str() : cls.parent_class_id.c_str();
-        // Parent name row (+ space for nested button)
-        track_text_w(measure_text_width(parent_name) + nested_button_size + content_indent);
+        // Parent name row (+ space for nav button + expand button)
+        track_text_w(measure_text_width(parent_name) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
         result.height += effective_row_height;
 
-        // If parent is expanded recursively
+        // If parent is expanded recursively — render as a nested card.
         const std::string parent_key = path_prefix + "parent";
         if (parent && is_nested_expanded(nested_expanded, parent_key)
             && visited.find(parent->id) == visited.end()
             && depth + 1 < max_nesting_depth)
         {
             visited.insert(parent->id);
-            result.height += effective_group_vertical_gap; // gap before nested content
+            result.height += effective_group_vertical_gap;       // gap before card
+            result.height += nested_header_height;               // card header bar
+            result.height += nested_card_content_inset_top;      // top inset inside card
             ContentSize nested = compute_class_content_size(
                 diagram, *parent, parent_key + "/", nested_expanded,
                 visited, depth + 1, effective_row_height,
                 effective_row_inner_gap, effective_group_vertical_gap,
                 component_subproperty_indent);
             result.height += nested.height;
-            result.max_text_width = std::max(result.max_text_width, nested.max_text_width);
+            result.height += nested_card_content_inset_bottom;   // bottom inset inside card
+            // Card needs: nested content width + card padding on both sides.
+            result.max_text_width = std::max(result.max_text_width,
+                nested.max_text_width + 2.0 * nested_card_pad_x);
             visited.erase(parent->id);
         }
     } else {
@@ -165,25 +171,30 @@ ContentSize compute_class_content_size(
             const char* type_name = child_class ? child_class->type_name.c_str() : co.class_id.c_str();
             std::string name_part = co.label.empty() ? std::string(type_name) : co.label;
             std::string line = std::string(type_name) + ": " + name_part;
-            // Child row (+ space for nested button)
-            track_text_w(measure_text_width(line.c_str()) + nested_button_size + content_indent);
+            // Child row (+ space for nav button + expand button)
+            track_text_w(measure_text_width(line.c_str()) + nav_button_size + nav_button_gap + nested_button_size + content_indent);
             result.height += effective_row_height;
 
-            // If child is expanded recursively
+            // If child is expanded recursively — render as a nested card.
             const std::string child_key = path_prefix + "child/" + std::to_string(i);
             if (child_class && is_nested_expanded(nested_expanded, child_key)
                 && visited.find(child_class->id) == visited.end()
                 && depth + 1 < max_nesting_depth)
             {
                 visited.insert(child_class->id);
-                result.height += effective_group_vertical_gap; // gap before nested content
+                result.height += effective_group_vertical_gap;       // gap before card
+                result.height += nested_header_height;               // card header bar
+                result.height += nested_card_content_inset_top;      // top inset inside card
                 ContentSize nested = compute_class_content_size(
                     diagram, *child_class, child_key + "/", nested_expanded,
                     visited, depth + 1, effective_row_height,
                     effective_row_inner_gap, effective_group_vertical_gap,
                     component_subproperty_indent);
                 result.height += nested.height;
-                result.max_text_width = std::max(result.max_text_width, nested.max_text_width);
+                result.height += nested_card_content_inset_bottom;   // bottom inset inside card
+                // Card needs: nested content width + card padding on both sides.
+                result.max_text_width = std::max(result.max_text_width,
+                    nested.max_text_width + 2.0 * nested_card_pad_x);
                 visited.erase(child_class->id);
             }
 

@@ -295,7 +295,33 @@ bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
         }
     }
 
+    // Check navigation arrow buttons (recorded during last render pass).
+    for (const auto& nb : nav_hit_buttons_) {
+        if (wx >= nb.x && wx <= nb.x + nb.w && wy >= nb.y && wy <= nb.y + nb.h) {
+            // Expand the target class card if it isn't already open.
+            auto it = class_expanded_.find(nb.target_class_id);
+            if (it == class_expanded_.end() || !it->second) {
+                set_class_block_expanded(nb.target_class_id, true);
+            }
+            focus_on_class(nb.target_class_id);
+            return true;
+        }
+    }
+
     return false;
+}
+
+void DiagramCanvas::focus_on_class(const std::string& class_id) {
+    auto placed = physics_layout_.get_placed();
+    for (const auto& block : placed.blocks) {
+        if (block.class_id == class_id) {
+            double cx = block.rect.x + block.rect.width * 0.5;
+            double cy = block.rect.y + block.rect.height * 0.5;
+            offset_x_ = last_region_width_ * 0.5f - static_cast<float>(cx) * zoom_;
+            offset_y_ = last_region_height_ * 0.5f - static_cast<float>(cy) * zoom_;
+            return;
+        }
+    }
 }
 
 void DiagramCanvas::handle_input(float region_width, float region_height) {
@@ -389,6 +415,9 @@ void DiagramCanvas::handle_input(float region_width, float region_height) {
 bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
     if (region_width <= 0 || region_height <= 0) return false;
 
+    last_region_width_ = region_width;
+    last_region_height_ = region_height;
+
     handle_input(region_width, region_height);
 
     ImVec2 region_min = ImGui::GetCursorScreenPos();
@@ -404,8 +433,9 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
         diagram_placement::PlacedClassDiagram displayed = physics_layout_.get_placed();
         log_visual_overlaps(displayed);
         nested_hit_buttons_.clear();
+        nav_hit_buttons_.clear();
         diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed,
-            offset_x_, offset_y_, zoom_, nested_expanded_, &nested_hit_buttons_);
+            offset_x_, offset_y_, zoom_, nested_expanded_, &nested_hit_buttons_, &nav_hit_buttons_);
     } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
             (double)region_width, (double)region_height);

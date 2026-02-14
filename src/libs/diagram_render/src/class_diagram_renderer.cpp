@@ -50,8 +50,9 @@ struct RenderContext {
     float f_content_inset_side;
     float f_accent_bar_width;
     float f_content_indent;
-    float f_nesting_indent;
     float f_nested_button_size;
+    float f_nav_button_size;
+    float f_nav_button_gap;
     float section_rounding;
     // Colors.
     unsigned int text_color;
@@ -71,9 +72,19 @@ struct RenderContext {
     unsigned int children_bg;
     unsigned int children_header_color;
     unsigned int children_accent;
+    // Nested card visuals -- parent context (blue tint).
+    unsigned int parent_card_bg;
+    unsigned int parent_card_border;
+    unsigned int parent_card_header_bg;
+    // Nested card visuals -- child context (purple tint).
+    unsigned int child_card_bg;
+    unsigned int child_card_border;
+    unsigned int child_card_header_bg;
+    unsigned int nav_button_color;
     // Nested state.
     const std::unordered_map<std::string, bool>& nested_expanded;
     std::vector<NestedHitButton>* out_hit_buttons;
+    std::vector<NavHitButton>* out_nav_buttons;
 };
 
 // Draw a small [+] or [-] button for nested expand/collapse.
@@ -119,27 +130,113 @@ void record_hit_button(const RenderContext& ctx,
     ctx.out_hit_buttons->push_back(std::move(hb));
 }
 
+// Draw a small navigation arrow button (right-pointing triangle).
+void draw_nav_button(const RenderContext& ctx, float btn_x, float btn_y) {
+    const float bs = ctx.f_nav_button_size;
+    ImVec2 btn_min = world_to_screen(btn_x, btn_y, ctx.offset_x, ctx.offset_y, ctx.zoom);
+    ImVec2 btn_max = world_to_screen(btn_x + bs, btn_y + bs, ctx.offset_x, ctx.offset_y, ctx.zoom);
+    ctx.draw_list->AddRectFilled(btn_min, btn_max, ctx.button_bg);
+    ctx.draw_list->AddRect(btn_min, btn_max, ctx.border_color, 0.0f, 0, 1.0f);
+
+    // Draw a right-pointing triangle (arrow) inside the button.
+    ImVec2 center = world_to_screen(btn_x + bs * 0.5f, btn_y + bs * 0.5f,
+        ctx.offset_x, ctx.offset_y, ctx.zoom);
+    float h = 3.0f * ctx.zoom;  // half-height of triangle
+    float w = 2.5f * ctx.zoom;  // half-width of triangle
+    ImVec2 p1(center.x - w, center.y - h);  // top-left
+    ImVec2 p2(center.x + w, center.y);      // right-center
+    ImVec2 p3(center.x - w, center.y + h);  // bottom-left
+    ctx.draw_list->AddTriangleFilled(p1, p2, p3, ctx.nav_button_color);
+}
+
+// Record a hit region for a navigation button.
+void record_nav_button(const RenderContext& ctx,
+    const std::string& target_class_id,
+    float btn_x, float btn_y)
+{
+    if (!ctx.out_nav_buttons) return;
+    NavHitButton nb;
+    nb.target_class_id = target_class_id;
+    nb.x = static_cast<double>(btn_x);
+    nb.y = static_cast<double>(btn_y);
+    nb.w = static_cast<double>(ctx.f_nav_button_size);
+    nb.h = static_cast<double>(ctx.f_nav_button_size);
+    ctx.out_nav_buttons->push_back(std::move(nb));
+}
+
+// Colors for a nested card (mini-block drawn inside a parent card).
+struct NestedCardColors {
+    unsigned int bg;
+    unsigned int border;
+    unsigned int header_bg;
+};
+
+// Draw a mini-card (block-inside-block) around nested expanded content.
+// Caller provides exact card bounds (no internal padding applied here).
+// Uses draw list channels: card background/header on channel 0,
+// border + header text on channel 1 (so they render on top of row backgrounds).
+void draw_nested_card(const RenderContext& ctx,
+    float card_left, float card_top, float card_right, float card_bottom,
+    const char* class_name, const NestedCardColors& colors)
+{
+    const float card_rounding = 6.0f;
+    const float border_thickness = 2.0f;
+    const float f_header_h = static_cast<float>(nested_header_height);
+    const float header_bottom = card_top + f_header_h;
+
+    ImVec2 cmin = world_to_screen(card_left, card_top, ctx.offset_x, ctx.offset_y, ctx.zoom);
+    ImVec2 cmax = world_to_screen(card_right, card_bottom, ctx.offset_x, ctx.offset_y, ctx.zoom);
+
+    // --- Channel 0: card background + header bg (behind row content) ---
+    ctx.draw_list->ChannelsSetCurrent(0);
+
+    // Card body background.
+    ctx.draw_list->AddRectFilled(cmin, cmax, colors.bg, card_rounding);
+
+    // Header bar background (top portion with rounded top corners).
+    ImVec2 hdr_max = world_to_screen(card_right, header_bottom, ctx.offset_x, ctx.offset_y, ctx.zoom);
+    ctx.draw_list->AddRectFilled(cmin, hdr_max, colors.header_bg, card_rounding,
+        ImDrawFlags_RoundCornersTop);
+
+    // --- Channel 1: border + header text + separator (on top of row content) ---
+    ctx.draw_list->ChannelsSetCurrent(1);
+
+    // Card border.
+    ctx.draw_list->AddRect(cmin, cmax, colors.border, card_rounding, 0, border_thickness);
+
+    // Separator line under header.
+    ImVec2 sep_left = world_to_screen(card_left, header_bottom, ctx.offset_x, ctx.offset_y, ctx.zoom);
+    ImVec2 sep_right = world_to_screen(card_right, header_bottom, ctx.offset_x, ctx.offset_y, ctx.zoom);
+    ctx.draw_list->AddLine(sep_left, sep_right, colors.border, 1.0f);
+
+    // Header class name text.
+    const float text_pad = 6.0f;
+    const float text_y = card_top + (f_header_h - ctx.font_world_height) * 0.5f;
+    ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
+        world_to_screen(card_left + text_pad, text_y, ctx.offset_x, ctx.offset_y, ctx.zoom),
+        ctx.text_color, class_name);
+}
+
 // Recursively render the 4 content sections (Parent, Properties, Components, Children)
 // of a class inside a block card.
-// block_x, block_w: the top-level block's x position and width (used to compute content area).
+// area_left, area_right: content area bounds (rows are drawn within these).
 // cy: current y position (world); returns the new cy after rendering.
-// depth: nesting depth (0 = direct content of the block).
+// depth: nesting depth (0 = direct content of the block), used for depth limit.
 // path_prefix: tree path prefix, e.g. "Player/" or "Player/parent/".
 // block_class_id: the top-level block's class id (for hit button recording).
 // visited: set of class ids already on the current expansion path (cycle guard).
 float render_class_content(
     const RenderContext& ctx,
     const diagram_model::DiagramClass& cls,
-    float block_x, float block_w,
+    float area_left, float area_right,
     float cy,
     int depth,
     const std::string& path_prefix,
     const std::string& block_class_id,
     std::unordered_set<std::string>& visited)
 {
-    const float depth_offset = ctx.f_nesting_indent * static_cast<float>(depth);
-    const float content_x = block_x + ctx.f_content_inset_side + depth_offset;
-    const float content_right = block_x + block_w - ctx.f_content_inset_side;
+    const float content_x = area_left;
+    const float content_right = area_right;
     const float content_w = content_right - content_x;
     if (content_w <= 0.0f) return cy;
 
@@ -241,8 +338,13 @@ float render_class_content(
                 const float nbtn_y = row_top + (ctx.f_row_height_effective - ctx.f_nested_button_size) * 0.5f;
                 draw_nested_button(ctx, nbtn_x, nbtn_y, parent_expanded);
                 record_hit_button(ctx, block_class_id, parent_key, nbtn_x, nbtn_y);
+                // Nav button to the left of expand button.
+                const float nav_x = nbtn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
+                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                draw_nav_button(ctx, nav_x, nav_y);
+                record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
             } else if (parent_is_cycle) {
-                // Show cycle indicator.
+                // Show cycle indicator + nav button.
                 const float cycle_x = content_right - ctx.font->CalcTextSizeA(
                     ctx.scaled_font_size, FLT_MAX, 0.0f, "(cycle)", nullptr).x / ctx.safe_zoom;
                 ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
@@ -250,12 +352,19 @@ float render_class_content(
                         ctx.offset_x, ctx.offset_y, ctx.zoom),
                     ctx.empty_color, "(cycle)");
             }
+            // Nav button: show even when expand is unavailable (e.g. at depth limit), if class exists.
+            if (parent_cls && !can_expand) {
+                const float nav_x = content_right - ctx.f_nav_button_size;
+                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                draw_nav_button(ctx, nav_x, nav_y);
+                record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
+            }
         } else {
             draw_row_text(row_top, ctx.empty_color, "\xE2\x80\x94");
         }
         cy += ctx.f_row_height_effective;
 
-        // If parent is expanded, render its content recursively.
+        // If parent is expanded, render its content as a nested card.
         if (!cls.parent_class_id.empty()) {
             const diagram_model::DiagramClass* parent_cls = find_class(ctx.diagram, cls.parent_class_id);
             const std::string parent_key = path_prefix + "parent";
@@ -265,8 +374,24 @@ float render_class_content(
             {
                 visited.insert(parent_cls->id);
                 cy += ctx.f_group_vertical_gap_effective;
-                cy = render_class_content(ctx, *parent_cls, block_x, block_w,
+                // Card fills the current content area.
+                const float card_left = content_x;
+                const float card_right = content_right;
+                const float card_top = cy;
+                cy += static_cast<float>(nested_header_height);            // card header
+                cy += static_cast<float>(nested_card_content_inset_top);   // top inset
+                // Inner bounds: content area inside the card border.
+                const float inner_left = card_left + static_cast<float>(nested_card_pad_x);
+                const float inner_right = card_right - static_cast<float>(nested_card_pad_x);
+                cy = render_class_content(ctx, *parent_cls, inner_left, inner_right,
                     cy, depth + 1, parent_key + "/", block_class_id, visited);
+                cy += static_cast<float>(nested_card_content_inset_bottom); // bottom inset
+                // Draw the card around everything.
+                const NestedCardColors parent_colors {
+                    ctx.parent_card_bg, ctx.parent_card_border,
+                    ctx.parent_card_header_bg };
+                draw_nested_card(ctx, card_left, card_top, card_right, cy,
+                    parent_cls->type_name.c_str(), parent_colors);
                 visited.erase(parent_cls->id);
             }
         }
@@ -366,6 +491,11 @@ float render_class_content(
                 const float nbtn_y = row_top + (ctx.f_row_height_effective - ctx.f_nested_button_size) * 0.5f;
                 draw_nested_button(ctx, nbtn_x, nbtn_y, child_expanded);
                 record_hit_button(ctx, block_class_id, child_key, nbtn_x, nbtn_y);
+                // Nav button to the left of expand button.
+                const float nav_x = nbtn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
+                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                draw_nav_button(ctx, nav_x, nav_y);
+                record_nav_button(ctx, child_class->id, nav_x, nav_y);
             } else if (child_is_cycle) {
                 const float cycle_x = content_right - ctx.font->CalcTextSizeA(
                     ctx.scaled_font_size, FLT_MAX, 0.0f, "(cycle)", nullptr).x / ctx.safe_zoom;
@@ -374,18 +504,41 @@ float render_class_content(
                         ctx.offset_x, ctx.offset_y, ctx.zoom),
                     ctx.empty_color, "(cycle)");
             }
+            // Nav button: show even when expand is unavailable, if class exists.
+            if (child_class && !can_expand) {
+                const float nav_x = content_right - ctx.f_nav_button_size;
+                const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
+                draw_nav_button(ctx, nav_x, nav_y);
+                record_nav_button(ctx, child_class->id, nav_x, nav_y);
+            }
 
             cy += ctx.f_row_height_effective;
 
-            // If child is expanded, render its content recursively.
+            // If child is expanded, render its content as a nested card.
             if (child_class && is_nested_expanded(ctx.nested_expanded, child_key)
                 && visited.find(child_class->id) == visited.end()
                 && depth + 1 < max_nesting_depth)
             {
                 visited.insert(child_class->id);
                 cy += ctx.f_group_vertical_gap_effective;
-                cy = render_class_content(ctx, *child_class, block_x, block_w,
+                // Card fills the current content area.
+                const float card_left = content_x;
+                const float card_right = content_right;
+                const float card_top = cy;
+                cy += static_cast<float>(nested_header_height);            // card header
+                cy += static_cast<float>(nested_card_content_inset_top);   // top inset
+                // Inner bounds: content area inside the card border.
+                const float inner_left = card_left + static_cast<float>(nested_card_pad_x);
+                const float inner_right = card_right - static_cast<float>(nested_card_pad_x);
+                cy = render_class_content(ctx, *child_class, inner_left, inner_right,
                     cy, depth + 1, child_key + "/", block_class_id, visited);
+                cy += static_cast<float>(nested_card_content_inset_bottom); // bottom inset
+                // Draw the card around everything.
+                const NestedCardColors child_colors {
+                    ctx.child_card_bg, ctx.child_card_border,
+                    ctx.child_card_header_bg };
+                draw_nested_card(ctx, card_left, card_top, card_right, cy,
+                    child_class->type_name.c_str(), child_colors);
                 visited.erase(child_class->id);
             }
 
@@ -409,7 +562,8 @@ void render_class_diagram(ImDrawList* draw_list,
     const diagram_placement::PlacedClassDiagram& placed,
     float offset_x, float offset_y, float zoom,
     const std::unordered_map<std::string, bool>& nested_expanded,
-    std::vector<NestedHitButton>* out_hit_buttons)
+    std::vector<NestedHitButton>* out_hit_buttons,
+    std::vector<NavHitButton>* out_nav_buttons)
 {
     if (!draw_list) return;
 
@@ -462,8 +616,9 @@ void render_class_diagram(ImDrawList* draw_list,
         f_content_inset_side,
         f_accent_bar_width,
         f_content_indent,
-        static_cast<float>(nesting_indent),
         static_cast<float>(nested_button_size),
+        static_cast<float>(nav_button_size),
+        static_cast<float>(nav_button_gap),
         2.0f, // section_rounding
         text_color,
         IM_COL32(160, 160, 165, 255), // type_muted_color
@@ -482,8 +637,16 @@ void render_class_diagram(ImDrawList* draw_list,
         IM_COL32(48, 44, 52, 255),    // children_bg
         IM_COL32(145, 135, 155, 255), // children_header_color
         IM_COL32(95, 80, 110, 255),   // children_accent
+        IM_COL32(35, 45, 62, 255),    // parent_card_bg (blue-tinted)
+        IM_COL32(80, 110, 165, 255),  // parent_card_border (bright blue, fully opaque)
+        IM_COL32(28, 36, 52, 255),    // parent_card_header_bg (darker blue)
+        IM_COL32(50, 38, 62, 255),    // child_card_bg (purple-tinted)
+        IM_COL32(120, 85, 165, 255),  // child_card_border (bright purple, fully opaque)
+        IM_COL32(42, 30, 52, 255),    // child_card_header_bg (darker purple)
+        IM_COL32(100, 180, 255, 255),  // nav_button_color (bright blue arrow)
         nested_expanded,
         out_hit_buttons,
+        out_nav_buttons,
     };
 
     for (const auto& block : placed.blocks) {
@@ -546,12 +709,21 @@ void render_class_diagram(ImDrawList* draw_list,
         }
 
         // --- Content (4 sections, recursively expandable) ---
+        // Use draw list channels so nested frame backgrounds go behind content:
+        //   channel 0 = frame backgrounds + accents
+        //   channel 1 = row content + frame borders
+        draw_list->ChannelsSplit(2);
+        draw_list->ChannelsSetCurrent(1);
+
         float cy = y + f_header_height + static_cast<float>(content_inset_top) + f_header_content_gap;
         const std::string path_prefix = block.class_id + "/";
         std::unordered_set<std::string> visited;
         visited.insert(cl->id);
-        render_class_content(ctx, *cl, x, w, cy, 0, path_prefix, block.class_id, visited);
+        const float area_left = x + f_content_inset_side;
+        const float area_right = x + w - f_content_inset_side;
+        render_class_content(ctx, *cl, area_left, area_right, cy, 0, path_prefix, block.class_id, visited);
 
+        draw_list->ChannelsMerge();
         draw_list->PopClipRect();
     }
 }
