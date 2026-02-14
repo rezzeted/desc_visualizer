@@ -754,20 +754,7 @@ void render_class_diagram(ImDrawList* draw_list,
                 }
             }
 
-            // Label for composition lines.
-            if (cl.kind == diagram_placement::ConnectionKind::Composition && !cl.label.empty()
-                && cl.points.size() >= 2)
-            {
-                std::size_t mid_idx = cl.points.size() / 2;
-                float lx = static_cast<float>((cl.points[mid_idx - 1].first + cl.points[mid_idx].first) * 0.5);
-                float ly = static_cast<float>((cl.points[mid_idx - 1].second + cl.points[mid_idx].second) * 0.5);
-                ImFont* font = ImGui::GetFont();
-                float fs = ImGui::GetFontSize() * zoom * 0.8f;
-                ImVec2 label_pos = world_to_screen(lx, ly, offset_x, offset_y, zoom);
-                label_pos.x += 3.0f;
-                label_pos.y -= fs * 0.5f;
-                draw_list->AddText(font, fs, label_pos, color, cl.label.c_str());
-            }
+            // Labels on lines removed — they are hard to read and add visual clutter.
         }
     }
 
