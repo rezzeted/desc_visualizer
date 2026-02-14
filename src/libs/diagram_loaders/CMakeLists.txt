@@ -1,5 +1,7 @@
 add_library(diagram_loaders STATIC
     src/json_loader.cpp
+    src/class_diagram_json_loader.cpp
+    src/debug_class_diagram.cpp
 )
 target_include_directories(diagram_loaders PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include

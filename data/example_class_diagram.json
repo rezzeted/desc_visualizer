@@ -1,0 +1,35 @@
+{
+  "name": "App classes",
+  "classes": [
+    {
+      "id": "Entity",
+      "type_name": "Entity",
+      "parent_class_id": null,
+      "x": 50,
+      "y": 20,
+      "properties": [{"name": "id", "type": "int"}],
+      "components": [{"name": "transform", "type": "Transform"}],
+      "child_objects": []
+    },
+    {
+      "id": "Node",
+      "type_name": "Node",
+      "parent_class_id": "Entity",
+      "x": 50,
+      "y": 120,
+      "properties": [{"name": "name", "type": "string"}],
+      "components": [{"name": "mesh", "type": "MeshComponent"}],
+      "child_objects": [{"class_id": "Widget", "label": "ui"}]
+    },
+    {
+      "id": "Widget",
+      "type_name": "Widget",
+      "parent_class_id": "Entity",
+      "x": 280,
+      "y": 20,
+      "properties": [{"name": "visible", "type": "bool"}],
+      "components": [],
+      "child_objects": [{"class_id": "View", "label": "content"}]
+    }
+  ]
+}

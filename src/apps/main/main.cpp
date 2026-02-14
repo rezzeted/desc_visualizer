@@ -6,6 +6,7 @@
 #include "imgui_impl_opengl3.h"
 #include <canvas/canvas.hpp>
 #include <diagram_loaders/json_loader.hpp>
+#include <diagram_loaders/debug_class_diagram.hpp>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_opengl.h>
@@ -96,19 +97,21 @@ int main(int argc, char* argv[])
     ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 130");
 
-    std::optional<diagram_model::Diagram> diagram;
-    const char* paths[] = { "data/example_diagram.json", "example_diagram.json" };
-    for (const char* path : paths) {
-        auto loaded = diagram_loaders::load_diagram_from_json_file(path);
+    std::optional<diagram_model::ClassDiagram> class_diagram;
+    const char* class_paths[] = { "data/example_class_diagram.json", "example_class_diagram.json" };
+    for (const char* path : class_paths) {
+        auto loaded = diagram_loaders::load_class_diagram_from_json_file(path);
         if (loaded) {
-            diagram = std::move(*loaded);
+            class_diagram = std::move(*loaded);
             break;
         }
     }
+    if (!class_diagram)
+        class_diagram = diagram_loaders::generate_debug_class_diagram();
 
     canvas::DiagramCanvas diagram_canvas;
-    if (diagram)
-        diagram_canvas.set_diagram(&*diagram);
+    if (class_diagram)
+        diagram_canvas.set_class_diagram(&*class_diagram);
 
     bool running = true;
     while (running) {

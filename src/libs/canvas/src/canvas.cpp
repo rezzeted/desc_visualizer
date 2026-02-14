@@ -1,8 +1,17 @@
 #include <canvas/canvas.hpp>
 #include <diagram_placement/placer.hpp>
+#include <diagram_placement/class_diagram_placement.hpp>
 #include <diagram_render/renderer.hpp>
 #include "imgui.h"
 #include <cmath>
+
+namespace {
+
+const float class_button_size = 20.0f;
+const float class_padding = 8.0f;
+const float class_header_height = 28.0f;
+
+} // namespace
 
 namespace canvas {
 
@@ -16,6 +25,14 @@ void DiagramCanvas::set_diagram(const diagram_model::Diagram* diagram) {
 
 const diagram_model::Diagram* DiagramCanvas::diagram() const {
     return diagram_;
+}
+
+void DiagramCanvas::set_class_diagram(const diagram_model::ClassDiagram* class_diagram) {
+    class_diagram_ = class_diagram;
+}
+
+const diagram_model::ClassDiagram* DiagramCanvas::class_diagram() const {
+    return class_diagram_;
 }
 
 void DiagramCanvas::pan(float dx, float dy) {
@@ -85,6 +102,23 @@ void DiagramCanvas::draw_grid(ImVec2 region_min, ImVec2 region_max) {
     }
 }
 
+bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
+    if (!class_diagram_) return false;
+    double wx, wy;
+    screen_to_world(screen_x, screen_y, wx, wy);
+    diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_);
+    for (const auto& block : placed.blocks) {
+        double btn_x = block.rect.x + block.rect.width - class_padding - class_button_size;
+        double btn_y = block.rect.y + (class_header_height - class_button_size) * 0.5;
+        if (wx >= btn_x && wx <= btn_x + class_button_size && wy >= btn_y && wy <= btn_y + class_button_size) {
+            bool& exp = class_expanded_[block.class_id];
+            exp = !exp;
+            return true;
+        }
+    }
+    return false;
+}
+
 void DiagramCanvas::handle_input(float region_width, float region_height) {
     ImGuiIO& io = ImGui::GetIO();
     ImVec2 mouse = io.MousePos;
@@ -95,6 +129,8 @@ void DiagramCanvas::handle_input(float region_width, float region_height) {
                      mouse.y >= win_min.y && mouse.y <= win_max.y;
 
     if (ImGui::IsMouseClicked(0) && in_region) {
+        if (try_toggle_class_expanded(mouse.x, mouse.y))
+            return;
         dragging_ = true;
         drag_start_x_ = mouse.x;
         drag_start_y_ = mouse.y;
@@ -130,7 +166,10 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
 
     draw_grid(region_min, region_max);
 
-    if (diagram_) {
+    if (class_diagram_) {
+        diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_);
+        diagram_render::render_class_diagram(draw_list, *class_diagram_, placed, offset_x_, offset_y_, zoom_);
+    } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
             (double)region_width, (double)region_height);
         diagram_render::render_diagram(draw_list, placed, offset_x_, offset_y_, zoom_);

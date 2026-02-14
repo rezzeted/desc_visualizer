@@ -1,7 +1,8 @@
 #pragma once
 
 #include <diagram_model/types.hpp>
-#include <memory>
+#include <diagram_model/class_diagram.hpp>
+#include <unordered_map>
 
 struct ImVec2;
 
@@ -14,6 +15,11 @@ public:
 
     void set_diagram(const diagram_model::Diagram* diagram);
     const diagram_model::Diagram* diagram() const;
+
+    void set_class_diagram(const diagram_model::ClassDiagram* class_diagram);
+    const diagram_model::ClassDiagram* class_diagram() const;
+    std::unordered_map<std::string, bool>& class_expanded() { return class_expanded_; }
+    const std::unordered_map<std::string, bool>& class_expanded() const { return class_expanded_; }
 
     void set_grid_step(float step) { grid_step_ = step; }
     float grid_step() const { return grid_step_; }
@@ -36,6 +42,8 @@ public:
 
 private:
     const diagram_model::Diagram* diagram_ = nullptr;
+    const diagram_model::ClassDiagram* class_diagram_ = nullptr;
+    std::unordered_map<std::string, bool> class_expanded_;
     float offset_x_ = 0;
     float offset_y_ = 0;
     float zoom_ = 1.0f;
@@ -48,6 +56,7 @@ private:
 
     void draw_grid(ImVec2 region_min, ImVec2 region_max);
     void handle_input(float region_width, float region_height);
+    bool try_toggle_class_expanded(float screen_x, float screen_y);
 };
 
 } // namespace canvas
