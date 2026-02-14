@@ -28,7 +28,9 @@ int main(int argc, char* argv[])
 
     const int window_width = 1280;
     const int window_height = 720;
-    SDL_Window* window = SDL_CreateWindow("ImGui + SDL3", window_width, window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+    const SDL_WindowFlags window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+        | SDL_WINDOW_HIGH_PIXEL_DENSITY;  // HiDPI: request native pixel density back buffer
+    SDL_Window* window = SDL_CreateWindow("ImGui + SDL3", window_width, window_height, window_flags);
     if (!window) {
         (void)fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
@@ -48,8 +50,45 @@ int main(int argc, char* argv[])
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
+    // HiDPI: scale fonts and viewports from DPI (backend sets DisplayFramebufferScale)
+    io.ConfigFlags |= ImGuiConfigFlags_DpiEnableScaleFonts;
+    io.ConfigFlags |= ImGuiConfigFlags_DpiEnableScaleViewports;
 
     ImGui::StyleColorsDark();
+
+    // Load a nice TTF font (replaces the default pixel font for crisp text)
+    ImGuiIO& io_ref = ImGui::GetIO();
+    ImFontConfig font_cfg;
+    font_cfg.OversampleH = 2;
+    font_cfg.OversampleV = 2;
+    font_cfg.PixelSnapH = true;
+    const float font_size_px = 19.0f;
+#ifdef _WIN32
+    const char* font_paths[] = {
+        "C:\\Windows\\Fonts\\segoeui.ttf",   // Segoe UI
+        "C:\\Windows\\Fonts\\seguiui.ttf",   // Segoe UI (legacy name)
+        "C:\\Windows\\Fonts\\arial.ttf",
+    };
+    bool font_loaded = false;
+    for (const char* path : font_paths) {
+        if (io_ref.Fonts->AddFontFromFileTTF(path, font_size_px, &font_cfg) != nullptr) {
+            font_loaded = true;
+            break;
+        }
+    }
+    (void)font_loaded;
+#else
+    // Linux: try common system font paths
+    const char* font_paths[] = {
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    };
+    for (const char* path : font_paths) {
+        if (io_ref.Fonts->AddFontFromFileTTF(path, font_size_px, &font_cfg) != nullptr)
+            break;
+    }
+#endif
 
     ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 130");
@@ -74,7 +113,10 @@ int main(int argc, char* argv[])
 
         ImGui::Render();
         SDL_GL_MakeCurrent(window, gl_context);
-        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+        // HiDPI: use framebuffer size in pixels, not logical DisplaySize
+        const int fb_w = (int)(io.DisplaySize.x * io.DisplayFramebufferScale.x);
+        const int fb_h = (int)(io.DisplaySize.y * io.DisplayFramebufferScale.y);
+        glViewport(0, 0, fb_w, fb_h);
         glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
