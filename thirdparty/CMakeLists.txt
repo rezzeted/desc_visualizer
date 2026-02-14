@@ -25,6 +25,15 @@ FetchContent_Declare(
 )
 FetchContent_Populate(imgui)
 
+# nlohmann/json (header-only)
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY "https://github.com/nlohmann/json.git"
+    GIT_TAG "v3.11.3"
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 # ImGui static library with SDL3 + OpenGL3 backends
 add_library(imgui_impl STATIC
     ${imgui_SOURCE_DIR}/imgui.cpp

@@ -1,2 +1,5 @@
-# Shared libraries (placeholder; add library subdirs here)
-# add_subdirectory(mylib)
+add_subdirectory(diagram_model)
+add_subdirectory(diagram_loaders)
+add_subdirectory(diagram_placement)
+add_subdirectory(diagram_render)
+add_subdirectory(canvas)

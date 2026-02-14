@@ -1,14 +1,17 @@
-// Minimal ImGui + SDL3 + OpenGL3 application (C++20)
-// Static link: use our main(), tell SDL we handle entry point
+// Diagram viewer: ImGui + SDL3 + OpenGL3 (C++20)
 #define SDL_MAIN_HANDLED
 
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_opengl3.h"
+#include <canvas/canvas.hpp>
+#include <diagram_loaders/json_loader.hpp>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_opengl.h>
 #include <cstdio>
+#include <optional>
+#include <string>
 
 int main(int argc, char* argv[])
 {
@@ -30,7 +33,7 @@ int main(int argc, char* argv[])
     const int window_height = 720;
     const SDL_WindowFlags window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
         | SDL_WINDOW_HIGH_PIXEL_DENSITY;  // HiDPI: request native pixel density back buffer
-    SDL_Window* window = SDL_CreateWindow("ImGui + SDL3", window_width, window_height, window_flags);
+    SDL_Window* window = SDL_CreateWindow("Diagram", window_width, window_height, window_flags);
     if (!window) {
         (void)fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         SDL_Quit();
@@ -93,6 +96,20 @@ int main(int argc, char* argv[])
     ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
     ImGui_ImplOpenGL3_Init("#version 130");
 
+    std::optional<diagram_model::Diagram> diagram;
+    const char* paths[] = { "data/example_diagram.json", "example_diagram.json" };
+    for (const char* path : paths) {
+        auto loaded = diagram_loaders::load_diagram_from_json_file(path);
+        if (loaded) {
+            diagram = std::move(*loaded);
+            break;
+        }
+    }
+
+    canvas::DiagramCanvas diagram_canvas;
+    if (diagram)
+        diagram_canvas.set_diagram(&*diagram);
+
     bool running = true;
     while (running) {
         SDL_Event event;
@@ -109,7 +126,18 @@ int main(int argc, char* argv[])
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
 
-        ImGui::ShowDemoWindow();
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(io.DisplaySize);
+        ImGui::Begin("Diagram", nullptr,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+            | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus);
+        ImVec2 canvas_size = ImGui::GetContentRegionAvail();
+        if (canvas_size.x > 0 && canvas_size.y > 0) {
+            ImGui::BeginChild("canvas", canvas_size, false, ImGuiWindowFlags_NoScrollbar);
+            diagram_canvas.update_and_draw(canvas_size.x, canvas_size.y);
+            ImGui::EndChild();
+        }
+        ImGui::End();
 
         ImGui::Render();
         SDL_GL_MakeCurrent(window, gl_context);

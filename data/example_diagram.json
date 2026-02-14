@@ -1,0 +1,11 @@
+{
+  "nodes": [
+    { "id": "n1", "label": "Start", "x": 100, "y": 50, "width": 80, "height": 40 },
+    { "id": "n2", "label": "Process", "x": 100, "y": 150, "width": 80, "height": 40 },
+    { "id": "n3", "label": "End", "x": 100, "y": 250, "width": 80, "height": 40 }
+  ],
+  "edges": [
+    { "id": "e1", "source": "n1", "target": "n2" },
+    { "id": "e2", "source": "n2", "target": "n3" }
+  ]
+}
