@@ -13,11 +13,11 @@
 # - Add comments for complex logic.
 
 # Directory Structure
-# - Place third-party libraries in `thirdparty/`.
-#   - Current third-party libs: `imgui`, `sdl3`.
+# - Place third-party configuration in `thirdparty/` (FetchContent fetches imgui, sdl3 into _build/_deps).
 # - Place project source code in:
 #   - `src/apps/` for applications.
 #   - `src/libs/` for shared libraries.
+#   - `src/tests/` for tests (enable_testing + add_subdirectory in root CMakeLists).
 
 # Build Instructions
 # - Use `build_vs.bat` to generate and build the project for Visual Studio.
@@ -26,5 +26,7 @@
 # - Third-party libraries (like ImGui) are linked as static libraries.
 
 # Dependencies
-# - ImGui is located in `thirdparty/imgui`. 
+# - Third-party libs (imgui, sdl3) are not in the repo; they are fetched via FetchContent
+#   into `_build/_deps/` and built from `thirdparty/CMakeLists.txt`.
+# - ImGui: ocornut/imgui (branch docking), SDL3: libsdl-org/SDL (release tag); both linked statically. 
 
