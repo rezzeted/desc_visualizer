@@ -1,5 +1,9 @@
 #pragma once
 
+#include <diagram_placement/types.hpp>
+#include <string>
+#include <unordered_map>
+
 struct ImDrawList;
 struct ImVec2;
 
@@ -21,5 +25,11 @@ void render_class_diagram(ImDrawList* draw_list,
     const diagram_model::ClassDiagram& diagram,
     const diagram_placement::PlacedClassDiagram& placed,
     float offset_x, float offset_y, float zoom);
+
+// Computes block width/height from content using ImGui::CalcTextSize (current font).
+// Call only when ImGui context is active. Returns map class_id -> Rect (width and height set; x,y zero).
+std::unordered_map<std::string, diagram_placement::Rect> compute_class_block_sizes(
+    const diagram_model::ClassDiagram& diagram,
+    const std::unordered_map<std::string, bool>& expanded);
 
 } // namespace diagram_render

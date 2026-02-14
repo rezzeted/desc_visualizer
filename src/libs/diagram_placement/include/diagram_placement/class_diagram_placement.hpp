@@ -19,7 +19,12 @@ struct PlacedClassDiagram {
     std::vector<PlacedClassBlock> blocks;
 };
 
+// If block_sizes is non-null, use it for each block's width/height (content-driven layout).
+// Otherwise fallback to internal size estimation.
+// If previous_positions is non-null, use it for initial (x,y) of each block to preserve stability when expanding.
 PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagram,
-    const std::unordered_map<std::string, bool>& expanded);
+    const std::unordered_map<std::string, bool>& expanded,
+    const std::unordered_map<std::string, Rect>* block_sizes = nullptr,
+    const std::unordered_map<std::string, Rect>* previous_positions = nullptr);
 
 } // namespace diagram_placement

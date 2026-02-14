@@ -104,7 +104,10 @@ void DiagramCanvas::draw_grid(ImVec2 region_min, ImVec2 region_max) {
 
 bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
     if (!class_diagram_) return false;
-    diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_);
+    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+    std::unordered_map<std::string, diagram_placement::Rect> current_rects;
+    class_rect_animator_.get_current_rects(current_rects);
+    diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_, &block_sizes, &current_rects);
     for (const auto& block : placed.blocks)
         class_rect_animator_.set_target(block.class_id, block.rect);
     double wx, wy;
@@ -170,7 +173,10 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
     draw_grid(region_min, region_max);
 
     if (class_diagram_) {
-        diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_);
+        auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+        std::unordered_map<std::string, diagram_placement::Rect> current_rects;
+        class_rect_animator_.get_current_rects(current_rects);
+        diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_, &block_sizes, &current_rects);
         for (const auto& block : placed.blocks)
             class_rect_animator_.set_target(block.class_id, block.rect);
         class_rect_animator_.tick(ImGui::GetIO().DeltaTime);
