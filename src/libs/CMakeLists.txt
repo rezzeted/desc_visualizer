@@ -1,4 +1,5 @@
 add_subdirectory(diagram_model)
+add_subdirectory(animation)
 add_subdirectory(diagram_loaders)
 add_subdirectory(diagram_placement)
 add_subdirectory(diagram_render)

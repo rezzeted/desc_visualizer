@@ -61,6 +61,8 @@ void render_class_diagram(ImDrawList* draw_list,
         draw_list->AddRectFilled(min_pt, max_pt, bg_color);
         draw_list->AddRect(min_pt, max_pt, border_color, 0.0f, 0, line_thickness);
 
+        draw_list->PushClipRect(min_pt, max_pt, true);
+
         float btn_x = x + w - padding - button_size;
         float btn_y = y + (header_height - button_size) * 0.5f;
         ImVec2 btn_min = world_to_screen(btn_x, btn_y, offset_x, offset_y, zoom);
@@ -82,7 +84,10 @@ void render_class_diagram(ImDrawList* draw_list,
             draw_list->AddLine(ImVec2(plus_center.x, plus_center.y - plus_half), ImVec2(plus_center.x, plus_center.y + plus_half), text_color, 1.5f);
         }
 
-        if (!block.expanded) continue;
+        if (!block.expanded) {
+            draw_list->PopClipRect();
+            continue;
+        }
 
         float cy = y + header_height;
         ImVec2 sep_left = world_to_screen(x, cy, offset_x, offset_y, zoom);
@@ -136,6 +141,8 @@ void render_class_diagram(ImDrawList* draw_list,
                 cy += row_height;
             }
         }
+
+        draw_list->PopClipRect();
     }
 }
 

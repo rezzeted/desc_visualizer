@@ -2,6 +2,7 @@
 
 #include <diagram_model/types.hpp>
 #include <diagram_model/class_diagram.hpp>
+#include <animation/rect_animator.hpp>
 #include <unordered_map>
 
 struct ImVec2;
@@ -44,6 +45,7 @@ private:
     const diagram_model::Diagram* diagram_ = nullptr;
     const diagram_model::ClassDiagram* class_diagram_ = nullptr;
     std::unordered_map<std::string, bool> class_expanded_;
+    animation::RectAnimator class_rect_animator_;
     float offset_x_ = 0;
     float offset_y_ = 0;
     float zoom_ = 1.0f;

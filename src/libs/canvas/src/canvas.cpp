@@ -104,12 +104,15 @@ void DiagramCanvas::draw_grid(ImVec2 region_min, ImVec2 region_max) {
 
 bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
     if (!class_diagram_) return false;
+    diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_);
+    for (const auto& block : placed.blocks)
+        class_rect_animator_.set_target(block.class_id, block.rect);
     double wx, wy;
     screen_to_world(screen_x, screen_y, wx, wy);
-    diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_);
     for (const auto& block : placed.blocks) {
-        double btn_x = block.rect.x + block.rect.width - class_padding - class_button_size;
-        double btn_y = block.rect.y + (class_header_height - class_button_size) * 0.5;
+        diagram_placement::Rect cur = class_rect_animator_.get_current(block.class_id);
+        double btn_x = cur.x + cur.width - class_padding - class_button_size;
+        double btn_y = cur.y + (class_header_height - class_button_size) * 0.5;
         if (wx >= btn_x && wx <= btn_x + class_button_size && wy >= btn_y && wy <= btn_y + class_button_size) {
             bool& exp = class_expanded_[block.class_id];
             exp = !exp;
@@ -168,7 +171,19 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
 
     if (class_diagram_) {
         diagram_placement::PlacedClassDiagram placed = diagram_placement::place_class_diagram(*class_diagram_, class_expanded_);
-        diagram_render::render_class_diagram(draw_list, *class_diagram_, placed, offset_x_, offset_y_, zoom_);
+        for (const auto& block : placed.blocks)
+            class_rect_animator_.set_target(block.class_id, block.rect);
+        class_rect_animator_.tick(ImGui::GetIO().DeltaTime);
+        diagram_placement::PlacedClassDiagram displayed;
+        for (const auto& block : placed.blocks) {
+            diagram_placement::PlacedClassBlock b;
+            b.class_id = block.class_id;
+            b.rect = class_rect_animator_.get_current(block.class_id);
+            b.margin = block.margin;
+            b.expanded = block.expanded;
+            displayed.blocks.push_back(b);
+        }
+        diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed, offset_x_, offset_y_, zoom_);
     } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
             (double)region_width, (double)region_height);

@@ -11,6 +11,7 @@ namespace diagram_placement {
 struct PlacedClassBlock {
     std::string class_id;
     Rect rect;
+    double margin = 8.0;
     bool expanded = false;
 };
 

@@ -22,6 +22,7 @@ std::optional<diagram_model::ClassDiagram> parse_class_diagram_json(const nlohma
         }
         cl.x = c.contains("x") && c["x"].is_number() ? c["x"].get<double>() : 0;
         cl.y = c.contains("y") && c["y"].is_number() ? c["y"].get<double>() : 0;
+        cl.margin = c.contains("margin") && c["margin"].is_number() ? c["margin"].get<double>() : 8.0;
 
         if (c.contains("properties") && c["properties"].is_array()) {
             for (const auto& p : c["properties"]) {

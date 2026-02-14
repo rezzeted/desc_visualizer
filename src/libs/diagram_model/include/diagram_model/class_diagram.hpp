@@ -26,6 +26,7 @@ struct DiagramClass {
     std::string parent_class_id;
     double x = 0;
     double y = 0;
+    double margin = 8.0;
     std::vector<Property> properties;
     std::vector<Component> components;
     std::vector<ChildObject> child_objects;
