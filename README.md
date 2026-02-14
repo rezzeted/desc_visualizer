@@ -40,18 +40,28 @@ cmake --build _build
 ```
 ├── CMakeLists.txt          # Корневой CMake, C++20, выходы в _build
 ├── build_vs.bat            # Сборка под Visual Studio (каталог _build)
+├── data/                   # Примеры данных (копируются в bin при сборке)
+│   └── example_diagram.json
+├── docs/
+│   └── ARCHITECTURE.md     # Описание архитектуры и слоёв (см. ниже)
 ├── thirdparty/
-│   └── CMakeLists.txt      # FetchContent: SDL3, ImGui; сборка imgui_impl (статическая lib)
+│   └── CMakeLists.txt      # FetchContent: SDL3, ImGui, nlohmann/json; imgui_impl
 ├── src/
-│   ├── apps/               # Приложения
-│   │   └── main/           # Основное приложение (main.cpp)
-│   ├── libs/               # Общие библиотеки (пока пусто)
+│   ├── apps/
+│   │   └── main/           # Приложение просмотра диаграмм (main.cpp)
+│   ├── libs/               # Библиотеки диаграмм
+│   │   ├── diagram_model/  # Структуры Node, Edge, Diagram
+│   │   ├── diagram_loaders/# Загрузка из JSON и др.
+│   │   ├── diagram_placement/ # Размещение узлов и рёбер на канвасе
+│   │   ├── diagram_render/ # Отрисовка через ImDrawList
+│   │   └── canvas/         # Канвас: pan, zoom, сетка
 │   └── tests/              # Тесты (enable_testing + add_subdirectory)
 └── _build/                 # Каталог сборки (создаётся при конфигурации)
 ```
 
-- **Третьесторонние библиотеки** — в `thirdparty/`; исходники не в репозитории, подтягиваются CMake (FetchContent).
-- **Исходники приложений** — в `src/apps/`, общие библиотеки — в `src/libs/`, тесты — в `src/tests/`.
+- **Третьесторонние библиотеки** — в `thirdparty/`; подтягиваются CMake (FetchContent).
+- **Приложение** — в `src/apps/main/`; библиотеки диаграмм — в `src/libs/`, тесты — в `src/tests/`.
+- **Архитектура** — подробное описание слоёв, зависимостей и потока данных см. в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ---
 
@@ -63,6 +73,7 @@ cmake --build _build
 |------------|-------------|------------|-------------------|
 | **SDL3** | libsdl-org/SDL | `release-3.2.30` | Окно, события, OpenGL-контекст; статическая сборка (`SDL_STATIC ON`). |
 | **ImGui** | ocornut/imgui | ветка `docking` | Ядро + бэкенды SDL3 и OpenGL3; статическая библиотека `imgui_impl`. |
+| **nlohmann/json** | nlohmann/json | v3.11.3 | Парсинг JSON при загрузке диаграмм (`diagram_loaders`). |
 
 У ImGui нет корневого `CMakeLists.txt`, поэтому используется `FetchContent_Populate(imgui)` и свой целевой статический таргет `imgui_impl` с нужными исходниками и путями включения.
 
