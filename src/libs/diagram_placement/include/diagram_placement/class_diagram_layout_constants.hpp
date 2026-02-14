@@ -42,6 +42,11 @@ constexpr double expanded_min_width = 180.0;
 constexpr double block_margin = 16.0;
 constexpr double gap = 8.0;
 
+// Nested expansion: expanding parent/child classes inline inside a card.
+constexpr double nesting_indent = 14.0;        // extra left indent per nesting level
+constexpr double nested_button_size = 14.0;     // [+/-] button size for nested items
+constexpr int max_nesting_depth = 10;           // safety limit to prevent runaway recursion
+
 // Group row: minimal left offset (text after accent + padding + indent).
 inline constexpr double group_row_left_offset() {
     return padding + accent_bar_width + content_indent;

@@ -150,7 +150,7 @@ void DiagramCanvas::set_class_diagram(const diagram_model::ClassDiagram* class_d
     settle_error_reported_ = false;
     if (!class_diagram_) return;
 
-    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_, nested_expanded_);
     physics_layout_.build(*class_diagram_, class_expanded_, &block_sizes);
 }
 
@@ -166,7 +166,7 @@ bool DiagramCanvas::set_class_block_expanded(const std::string& class_id, bool e
     if (!found) return false;
 
     class_expanded_[class_id] = expanded;
-    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+    auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_, nested_expanded_);
     auto it = block_sizes.find(class_id);
     if (it != block_sizes.end()) {
         physics_layout_.update_block_size(class_id, it->second.width, it->second.height, expanded);
@@ -253,6 +253,8 @@ bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
     diagram_placement::PlacedClassDiagram placed = physics_layout_.get_placed();
     double wx, wy;
     screen_to_world(screen_x, screen_y, wx, wy);
+
+    // Check main expand/collapse buttons on block headers.
     for (const auto& block : placed.blocks) {
         const auto& cur = block.rect;
         double btn_x = cur.x + cur.width - class_padding - class_button_size;
@@ -260,7 +262,7 @@ bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
         if (wx >= btn_x && wx <= btn_x + class_button_size && wy >= btn_y && wy <= btn_y + class_button_size) {
             bool& exp = class_expanded_[block.class_id];
             exp = !exp;
-            auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_);
+            auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_, nested_expanded_);
             auto it = block_sizes.find(block.class_id);
             if (it != block_sizes.end()) {
                 physics_layout_.update_block_size(block.class_id, it->second.width, it->second.height, exp);
@@ -270,6 +272,29 @@ bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
             return true;
         }
     }
+
+    // Check nested expand/collapse buttons (recorded during last render pass).
+    for (const auto& hb : nested_hit_buttons_) {
+        if (wx >= hb.x && wx <= hb.x + hb.w && wy >= hb.y && wy <= hb.y + hb.h) {
+            bool& exp = nested_expanded_[hb.path];
+            exp = !exp;
+            // Recompute the owning block's size.
+            auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_, nested_expanded_);
+            auto it = block_sizes.find(hb.block_class_id);
+            if (it != block_sizes.end()) {
+                bool block_exp = false;
+                auto eit = class_expanded_.find(hb.block_class_id);
+                if (eit != class_expanded_.end()) block_exp = eit->second;
+                physics_layout_.update_block_size(hb.block_class_id,
+                    it->second.width, it->second.height, block_exp);
+            } else {
+                physics_layout_.build(*class_diagram_, class_expanded_, &block_sizes);
+            }
+            settle_error_reported_ = false;
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -378,7 +403,9 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
         physics_layout_.step(ImGui::GetIO().DeltaTime);
         diagram_placement::PlacedClassDiagram displayed = physics_layout_.get_placed();
         log_visual_overlaps(displayed);
-        diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed, offset_x_, offset_y_, zoom_);
+        nested_hit_buttons_.clear();
+        diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed,
+            offset_x_, offset_y_, zoom_, nested_expanded_, &nested_hit_buttons_);
     } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
             (double)region_width, (double)region_height);

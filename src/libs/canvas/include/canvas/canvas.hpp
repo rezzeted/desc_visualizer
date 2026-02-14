@@ -3,9 +3,11 @@
 #include <diagram_model/types.hpp>
 #include <diagram_model/class_diagram.hpp>
 #include <diagram_placement/physics_layout.hpp>
+#include <diagram_render/nested_hit_button.hpp>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 struct ImVec2;
 
@@ -24,6 +26,9 @@ public:
     std::unordered_map<std::string, bool>& class_expanded() { return class_expanded_; }
     const std::unordered_map<std::string, bool>& class_expanded() const { return class_expanded_; }
     bool set_class_block_expanded(const std::string& class_id, bool expanded);
+
+    std::unordered_map<std::string, bool>& nested_expanded() { return nested_expanded_; }
+    const std::unordered_map<std::string, bool>& nested_expanded() const { return nested_expanded_; }
 
     void set_grid_step(float step) { grid_step_ = step; }
     float grid_step() const { return grid_step_; }
@@ -50,6 +55,8 @@ private:
     const diagram_model::Diagram* diagram_ = nullptr;
     const diagram_model::ClassDiagram* class_diagram_ = nullptr;
     std::unordered_map<std::string, bool> class_expanded_;
+    std::unordered_map<std::string, bool> nested_expanded_;
+    std::vector<diagram_render::NestedHitButton> nested_hit_buttons_;
     diagram_placement::PhysicsLayout physics_layout_;
     float offset_x_ = 0;
     float offset_y_ = 0;
