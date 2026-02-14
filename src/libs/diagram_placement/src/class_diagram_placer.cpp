@@ -17,6 +17,10 @@ const double padding = 8;
 const double button_size = 20;
 const double block_margin = 16;
 const double gap = 8;
+const double section_gap = 2;
+const double group_gap = 6;
+const double content_inset_top = 6;
+const double content_inset_bottom = 10;
 
 double estimate_text_width(const std::string& s) {
     return std::max(expanded_min_width - 2 * padding, static_cast<double>(s.size()) * 7.0);
@@ -112,11 +116,17 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
             for (const auto& co : c.child_objects)
                 content_w = std::max(content_w, estimate_text_width(co.label.empty() ? co.class_id : co.label + " (" + co.class_id + ")"));
             w = content_w + 2 * padding + button_size;
-            h = header_height;
-            if (!c.parent_class_id.empty()) h += section_header_height + row_height;
-            h += (c.properties.empty() ? 0 : section_header_height + c.properties.size() * row_height);
-            h += (c.components.empty() ? 0 : section_header_height + c.components.size() * row_height);
-            h += (c.child_objects.empty() ? 0 : section_header_height + c.child_objects.size() * row_height);
+            h = header_height + content_inset_top;
+            size_t parent_rows = c.parent_class_id.empty() ? 1 : 1;
+            size_t prop_rows = c.properties.empty() ? 1 : c.properties.size();
+            size_t comp_rows = c.components.empty() ? 1 : c.components.size();
+            size_t child_rows = c.child_objects.empty() ? 1 : c.child_objects.size();
+            h += 4.0; /* gap after header line */
+            h += section_header_height + parent_rows * row_height + section_gap + group_gap;
+            h += section_header_height + prop_rows * row_height + section_gap + group_gap;
+            h += section_header_height + comp_rows * row_height + section_gap;
+            h += section_header_height + child_rows * row_height;
+            h += content_inset_bottom;
         }
 
         block.rect.width = w;
