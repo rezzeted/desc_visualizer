@@ -36,9 +36,14 @@ std::optional<diagram_model::ClassDiagram> parse_class_diagram_json(const nlohma
         cl.id = c["id"].get<std::string>();
         cl.type_name = c.contains("type_name") && c["type_name"].is_string()
             ? c["type_name"].get<std::string>() : cl.id;
-        if (c.contains("parent_class_id")) {
-            if (c["parent_class_id"].is_null()) cl.parent_class_id.clear();
-            else if (c["parent_class_id"].is_string()) cl.parent_class_id = c["parent_class_id"].get<std::string>();
+        // Support both array (new) and single-string (legacy) parent formats.
+        if (c.contains("parent_class_ids") && c["parent_class_ids"].is_array()) {
+            for (const auto& pid : c["parent_class_ids"])
+                if (pid.is_string()) cl.parent_class_ids.push_back(pid.get<std::string>());
+        } else if (c.contains("parent_class_id")) {
+            if (c["parent_class_id"].is_string())
+                cl.parent_class_ids.push_back(c["parent_class_id"].get<std::string>());
+            // null -> leave empty
         }
         cl.x = c.contains("x") && c["x"].is_number() ? c["x"].get<double>() : 0;
         cl.y = c.contains("y") && c["y"].is_number() ? c["y"].get<double>() : 0;

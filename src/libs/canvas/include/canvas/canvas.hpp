@@ -3,6 +3,7 @@
 #include <diagram_model/types.hpp>
 #include <diagram_model/class_diagram.hpp>
 #include <diagram_placement/physics_layout.hpp>
+#include <diagram_placement/connection_lines.hpp>
 #include <diagram_render/nested_hit_button.hpp>
 #include <string>
 #include <unordered_map>
@@ -62,6 +63,8 @@ private:
     std::vector<diagram_render::NavHitButton> nav_hit_buttons_;
     std::vector<diagram_render::ClassHoverRegion> hover_regions_;
     std::string hovered_class_id_;
+    std::vector<diagram_placement::ConnectionLine> connection_lines_;
+    bool connection_lines_dirty_ = true;
     diagram_placement::PhysicsLayout physics_layout_;
     float offset_x_ = 0;
     float offset_y_ = 0;

@@ -25,7 +25,9 @@ struct ChildObject {
 struct DiagramClass {
     std::string id;
     std::string type_name;
-    std::string parent_class_id;
+    // [0] = primary parent (defines tree layout, color/family, permanent inheritance line)
+    // [1..N] = secondary parents (lines shown only on hover)
+    std::vector<std::string> parent_class_ids;
     double x = 0;
     double y = 0;
     double margin = 8.0;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <diagram_placement/types.hpp>
+#include <diagram_placement/connection_lines.hpp>
 #include <diagram_render/nested_hit_button.hpp>
 #include <string>
 #include <unordered_map>
@@ -31,7 +32,8 @@ void render_class_diagram(ImDrawList* draw_list,
     std::vector<NestedHitButton>* out_hit_buttons = nullptr,
     std::vector<NavHitButton>* out_nav_buttons = nullptr,
     std::vector<ClassHoverRegion>* out_hover_regions = nullptr,
-    const std::string& hovered_class_id = {});
+    const std::string& hovered_class_id = {},
+    const std::vector<diagram_placement::ConnectionLine>& connection_lines = {});
 
 // Computes block width/height from content using ImGui::CalcTextSize (current font).
 // Call only when ImGui context is active. Returns map class_id -> Rect (width and height set; x,y zero).

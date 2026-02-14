@@ -334,17 +334,17 @@ float render_class_content(
         draw_row_text(row_top, ctx.parent_header_color, "Parent:");
         cy += ctx.f_row_height_effective + ctx.f_row_inner_gap_effective;
     }
-    {
-        const float row_top = cy;
-        draw_row_background(item_left, row_top, ctx.parent_bg, ctx.parent_accent);
-        if (!cls.parent_class_id.empty()) {
-            const diagram_model::DiagramClass* parent_cls = find_class(ctx.diagram, cls.parent_class_id);
+    if (!cls.parent_class_ids.empty()) {
+        for (std::size_t pi = 0; pi < cls.parent_class_ids.size(); ++pi) {
+            const float row_top = cy;
+            draw_row_background(item_left, row_top, ctx.parent_bg, ctx.parent_accent);
+            const diagram_model::DiagramClass* parent_cls = find_class(ctx.diagram, cls.parent_class_ids[pi]);
             const char* parent_name = parent_cls
-                ? parent_cls->type_name.c_str() : cls.parent_class_id.c_str();
+                ? parent_cls->type_name.c_str() : cls.parent_class_ids[pi].c_str();
             draw_row_text(row_top, ctx.text_color, parent_name);
 
-            // Nested expand button for parent (only if the parent class exists in diagram).
-            const std::string parent_key = path_prefix + "parent";
+            // Nested expand button for parent.
+            const std::string parent_key = path_prefix + "parent/" + std::to_string(pi);
             const bool parent_is_cycle = parent_cls && visited.find(parent_cls->id) != visited.end();
             const bool can_expand = parent_cls && !parent_is_cycle
                 && depth + 1 < max_nesting_depth;
@@ -354,13 +354,11 @@ float render_class_content(
                 const float nbtn_y = row_top + (ctx.f_row_height_effective - ctx.f_nested_button_size) * 0.5f;
                 draw_nested_button(ctx, nbtn_x, nbtn_y, parent_expanded);
                 record_hit_button(ctx, block_class_id, parent_key, nbtn_x, nbtn_y);
-                // Nav button to the left of expand button.
                 const float nav_x = nbtn_x - ctx.f_nav_button_gap - ctx.f_nav_button_size;
                 const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
                 draw_nav_button(ctx, nav_x, nav_y);
                 record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
             } else if (parent_is_cycle) {
-                // Show cycle indicator + nav button.
                 const float cycle_x = content_right - ctx.font->CalcTextSizeA(
                     ctx.scaled_font_size, FLT_MAX, 0.0f, "(cycle)", nullptr).x / ctx.safe_zoom;
                 ctx.draw_list->AddText(ctx.font, ctx.scaled_font_size,
@@ -368,46 +366,35 @@ float render_class_content(
                         ctx.offset_x, ctx.offset_y, ctx.zoom),
                     ctx.empty_color, "(cycle)");
             }
-            // Nav button: show even when expand is unavailable (e.g. at depth limit), if class exists.
             if (parent_cls && !can_expand) {
                 const float nav_x = content_right - ctx.f_nav_button_size;
                 const float nav_y = row_top + (ctx.f_row_height_effective - ctx.f_nav_button_size) * 0.5f;
                 draw_nav_button(ctx, nav_x, nav_y);
                 record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
             }
-            // Hover region: entire parent row maps to the parent class.
             if (parent_cls) {
                 record_hover_region(ctx, parent_cls->id,
                     item_left, row_top, content_right - item_left, ctx.f_row_height_effective);
             }
-        } else {
-            draw_row_text(row_top, ctx.empty_color, "\xE2\x80\x94");
-        }
-        cy += ctx.f_row_height_effective;
+            cy += ctx.f_row_height_effective;
 
-        // If parent is expanded, render its content as a nested card.
-        if (!cls.parent_class_id.empty()) {
-            const diagram_model::DiagramClass* parent_cls = find_class(ctx.diagram, cls.parent_class_id);
-            const std::string parent_key = path_prefix + "parent";
+            // If parent is expanded, render its content as a nested card.
             if (parent_cls && is_nested_expanded(ctx.nested_expanded, parent_key)
                 && visited.find(parent_cls->id) == visited.end()
                 && depth + 1 < max_nesting_depth)
             {
                 visited.insert(parent_cls->id);
                 cy += ctx.f_group_vertical_gap_effective;
-                // Card fills the current content area.
                 const float card_left = content_x;
                 const float card_right = content_right;
                 const float card_top = cy;
-                cy += static_cast<float>(nested_header_height);            // card header
-                cy += static_cast<float>(nested_card_content_inset_top);   // top inset
-                // Inner bounds: content area inside the card border.
+                cy += static_cast<float>(nested_header_height);
+                cy += static_cast<float>(nested_card_content_inset_top);
                 const float inner_left = card_left + static_cast<float>(nested_card_pad_x);
                 const float inner_right = card_right - static_cast<float>(nested_card_pad_x);
                 cy = render_class_content(ctx, *parent_cls, inner_left, inner_right,
                     cy, depth + 1, parent_key + "/", block_class_id, visited);
-                cy += static_cast<float>(nested_card_content_inset_bottom); // bottom inset
-                // Draw the card around everything.
+                cy += static_cast<float>(nested_card_content_inset_bottom);
                 const NestedCardColors parent_colors {
                     ctx.parent_card_bg, ctx.parent_card_border,
                     ctx.parent_card_header_bg };
@@ -415,7 +402,15 @@ float render_class_content(
                     parent_cls->type_name.c_str(), parent_colors);
                 visited.erase(parent_cls->id);
             }
+
+            if (pi + 1 < cls.parent_class_ids.size())
+                cy += ctx.f_row_inner_gap_effective;
         }
+    } else {
+        const float row_top = cy;
+        draw_row_background(item_left, row_top, ctx.parent_bg, ctx.parent_accent);
+        draw_row_text(row_top, ctx.empty_color, "\xE2\x80\x94");
+        cy += ctx.f_row_height_effective;
     }
     cy += ctx.f_group_vertical_gap_effective;
 
@@ -591,7 +586,8 @@ void render_class_diagram(ImDrawList* draw_list,
     std::vector<NestedHitButton>* out_hit_buttons,
     std::vector<NavHitButton>* out_nav_buttons,
     std::vector<ClassHoverRegion>* out_hover_regions,
-    const std::string& hovered_class_id)
+    const std::string& hovered_class_id,
+    const std::vector<diagram_placement::ConnectionLine>& connection_lines)
 {
     if (!draw_list) return;
 
@@ -678,6 +674,87 @@ void render_class_diagram(ImDrawList* draw_list,
         out_hover_regions,
     };
 
+    // ====== Permanent connection lines (behind blocks) ======
+    {
+        const unsigned int primary_inh_color = IM_COL32(100, 120, 150, 100);
+        const unsigned int primary_inh_hover = IM_COL32(100, 120, 150, 220);
+        const unsigned int composition_color = IM_COL32(130, 100, 150, 100);
+        const unsigned int composition_hover = IM_COL32(130, 100, 150, 220);
+        const float line_w = 1.5f;
+        const float line_w_hover = 2.5f;
+        const float marker_size = 6.0f * zoom;
+
+        for (const auto& cl : connection_lines) {
+            if (cl.kind == diagram_placement::ConnectionKind::SecondaryInheritance)
+                continue; // Drawn later, on top of blocks.
+
+            const bool is_hovered = (!hovered_class_id.empty()) &&
+                (cl.from_class_id == hovered_class_id || cl.to_class_id == hovered_class_id);
+            unsigned int color = (cl.kind == diagram_placement::ConnectionKind::PrimaryInheritance)
+                ? (is_hovered ? primary_inh_hover : primary_inh_color)
+                : (is_hovered ? composition_hover : composition_color);
+            float thickness = is_hovered ? line_w_hover : line_w;
+
+            // Draw line segments.
+            for (std::size_t i = 0; i + 1 < cl.points.size(); ++i) {
+                ImVec2 p0 = world_to_screen(static_cast<float>(cl.points[i].first),
+                    static_cast<float>(cl.points[i].second), offset_x, offset_y, zoom);
+                ImVec2 p1 = world_to_screen(static_cast<float>(cl.points[i + 1].first),
+                    static_cast<float>(cl.points[i + 1].second), offset_x, offset_y, zoom);
+                draw_list->AddLine(p0, p1, color, thickness);
+            }
+
+            // Marker at the "to" end (parent / target).
+            if (cl.points.size() >= 2) {
+                auto& last = cl.points.back();
+                ImVec2 tip = world_to_screen(static_cast<float>(last.first),
+                    static_cast<float>(last.second), offset_x, offset_y, zoom);
+                auto& prev = cl.points[cl.points.size() - 2];
+                float dx = static_cast<float>(last.first - prev.first);
+                float dy = static_cast<float>(last.second - prev.second);
+                float len = std::sqrt(dx * dx + dy * dy);
+                if (len > 1e-4f) {
+                    dx /= len; dy /= len;
+                    float px = -dy, py = dx; // perpendicular
+                    if (cl.kind == diagram_placement::ConnectionKind::PrimaryInheritance) {
+                        // Empty triangle marker.
+                        ImVec2 a = ImVec2(tip.x - dx * marker_size + px * marker_size * 0.5f,
+                                          tip.y - dy * marker_size + py * marker_size * 0.5f);
+                        ImVec2 b = ImVec2(tip.x - dx * marker_size - px * marker_size * 0.5f,
+                                          tip.y - dy * marker_size - py * marker_size * 0.5f);
+                        draw_list->AddTriangle(tip, a, b, color, thickness);
+                    } else {
+                        // Filled diamond marker for composition.
+                        float hs = marker_size * 0.5f;
+                        ImVec2 top_d = tip;
+                        ImVec2 right_d = ImVec2(tip.x - dx * hs + px * hs * 0.5f,
+                                                tip.y - dy * hs + py * hs * 0.5f);
+                        ImVec2 bottom_d = ImVec2(tip.x - dx * marker_size,
+                                                 tip.y - dy * marker_size);
+                        ImVec2 left_d = ImVec2(tip.x - dx * hs - px * hs * 0.5f,
+                                               tip.y - dy * hs - py * hs * 0.5f);
+                        draw_list->AddQuadFilled(top_d, right_d, bottom_d, left_d, color);
+                    }
+                }
+            }
+
+            // Label for composition lines.
+            if (cl.kind == diagram_placement::ConnectionKind::Composition && !cl.label.empty()
+                && cl.points.size() >= 2)
+            {
+                std::size_t mid_idx = cl.points.size() / 2;
+                float lx = static_cast<float>((cl.points[mid_idx - 1].first + cl.points[mid_idx].first) * 0.5);
+                float ly = static_cast<float>((cl.points[mid_idx - 1].second + cl.points[mid_idx].second) * 0.5);
+                ImFont* font = ImGui::GetFont();
+                float fs = ImGui::GetFontSize() * zoom * 0.8f;
+                ImVec2 label_pos = world_to_screen(lx, ly, offset_x, offset_y, zoom);
+                label_pos.x += 3.0f;
+                label_pos.y -= fs * 0.5f;
+                draw_list->AddText(font, fs, label_pos, color, cl.label.c_str());
+            }
+        }
+    }
+
     for (const auto& block : placed.blocks) {
         const diagram_model::DiagramClass* cl = find_class(diagram, block.class_id);
         if (!cl) continue;
@@ -754,6 +831,67 @@ void render_class_diagram(ImDrawList* draw_list,
 
         draw_list->ChannelsMerge();
         draw_list->PopClipRect();
+    }
+
+    // ====== Hover connection lines (SecondaryInheritance) — drawn over blocks ======
+    if (!hovered_class_id.empty()) {
+        const unsigned int sec_inh_color = IM_COL32(180, 140, 80, 180);
+        const float sec_line_w = 2.0f;
+        const float marker_size = 6.0f * zoom;
+        const float dash_len = 8.0f * zoom;
+        const float gap_len = 4.0f * zoom;
+
+        for (const auto& cl : connection_lines) {
+            if (cl.kind != diagram_placement::ConnectionKind::SecondaryInheritance) continue;
+            if (cl.from_class_id != hovered_class_id) continue;
+
+            // Draw dashed line segments.
+            for (std::size_t i = 0; i + 1 < cl.points.size(); ++i) {
+                ImVec2 p0 = world_to_screen(static_cast<float>(cl.points[i].first),
+                    static_cast<float>(cl.points[i].second), offset_x, offset_y, zoom);
+                ImVec2 p1 = world_to_screen(static_cast<float>(cl.points[i + 1].first),
+                    static_cast<float>(cl.points[i + 1].second), offset_x, offset_y, zoom);
+                // Draw dashed.
+                float seg_dx = p1.x - p0.x;
+                float seg_dy = p1.y - p0.y;
+                float seg_len = std::sqrt(seg_dx * seg_dx + seg_dy * seg_dy);
+                if (seg_len < 1e-3f) continue;
+                float ndx = seg_dx / seg_len, ndy = seg_dy / seg_len;
+                float drawn = 0.0f;
+                bool drawing = true;
+                while (drawn < seg_len) {
+                    float step = drawing ? dash_len : gap_len;
+                    float end = std::min(drawn + step, seg_len);
+                    if (drawing) {
+                        ImVec2 a = ImVec2(p0.x + ndx * drawn, p0.y + ndy * drawn);
+                        ImVec2 b = ImVec2(p0.x + ndx * end, p0.y + ndy * end);
+                        draw_list->AddLine(a, b, sec_inh_color, sec_line_w);
+                    }
+                    drawn = end;
+                    drawing = !drawing;
+                }
+            }
+
+            // Empty triangle marker at the "to" end.
+            if (cl.points.size() >= 2) {
+                auto& last = cl.points.back();
+                ImVec2 tip = world_to_screen(static_cast<float>(last.first),
+                    static_cast<float>(last.second), offset_x, offset_y, zoom);
+                auto& prev = cl.points[cl.points.size() - 2];
+                float dx = static_cast<float>(last.first - prev.first);
+                float dy = static_cast<float>(last.second - prev.second);
+                float len = std::sqrt(dx * dx + dy * dy);
+                if (len > 1e-4f) {
+                    dx /= len; dy /= len;
+                    float px = -dy, py = dx;
+                    ImVec2 a = ImVec2(tip.x - dx * marker_size + px * marker_size * 0.5f,
+                                      tip.y - dy * marker_size + py * marker_size * 0.5f);
+                    ImVec2 b = ImVec2(tip.x - dx * marker_size - px * marker_size * 0.5f,
+                                      tip.y - dy * marker_size - py * marker_size * 0.5f);
+                    draw_list->AddTriangle(tip, a, b, sec_inh_color, sec_line_w);
+                }
+            }
+        }
     }
 
     // --- Hover highlight pass: draw a glow overlay on the hovered block ---

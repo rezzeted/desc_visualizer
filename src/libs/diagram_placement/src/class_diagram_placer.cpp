@@ -140,9 +140,9 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                     content_w = std::max(content_w, estimate_text_width("Properties:"));
                     content_w = std::max(content_w, estimate_text_width("Components:"));
                     content_w = std::max(content_w, estimate_text_width("Children:"));
-                    if (!c.parent_class_id.empty()) {
-                        auto pit = by_id.find(c.parent_class_id);
-                        const std::string& parent_name = (pit != by_id.end()) ? pit->second->type_name : c.parent_class_id;
+                    for (const auto& pid : c.parent_class_ids) {
+                        auto pit = by_id.find(pid);
+                        const std::string& parent_name = (pit != by_id.end()) ? pit->second->type_name : pid;
                         content_w = std::max(content_w, estimate_text_width(parent_name));
                     }
                     for (const auto& p : c.properties)
@@ -164,8 +164,9 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                     h = header_height + content_inset_top;
                     h += header_content_gap;
                     const std::size_t component_rows = component_row_count(c);
+                    const std::size_t parent_items = c.parent_class_ids.empty() ? 0u : c.parent_class_ids.size();
                     h += expanded_content_height(
-                        1u,
+                        parent_items == 0 ? 1u : parent_items,
                         c.properties.size(),
                         component_rows,
                         c.child_objects.size());
@@ -183,9 +184,9 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                 content_w = std::max(content_w, estimate_text_width("Properties:"));
                 content_w = std::max(content_w, estimate_text_width("Components:"));
                 content_w = std::max(content_w, estimate_text_width("Children:"));
-                if (!c.parent_class_id.empty()) {
-                    auto pit = by_id.find(c.parent_class_id);
-                    const std::string& parent_name = (pit != by_id.end()) ? pit->second->type_name : c.parent_class_id;
+                for (const auto& pid : c.parent_class_ids) {
+                    auto pit = by_id.find(pid);
+                    const std::string& parent_name = (pit != by_id.end()) ? pit->second->type_name : pid;
                     content_w = std::max(content_w, estimate_text_width(parent_name));
                 }
                 for (const auto& p : c.properties)
@@ -207,8 +208,9 @@ PlacedClassDiagram place_class_diagram(const diagram_model::ClassDiagram& diagra
                 h = header_height + content_inset_top;
                 h += header_content_gap;
                 const std::size_t component_rows = component_row_count(c);
+                const std::size_t parent_items = c.parent_class_ids.empty() ? 0u : c.parent_class_ids.size();
                 h += expanded_content_height(
-                    1u,
+                    parent_items == 0 ? 1u : parent_items,
                     c.properties.size(),
                     component_rows,
                     c.child_objects.size());

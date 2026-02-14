@@ -73,10 +73,11 @@ void PhysicsLayout::build_world(const std::unordered_map<std::string, Rect>* pre
     std::unordered_map<std::string, int> depth_map;
     std::unordered_map<std::string, std::vector<std::string>> children_of;
     for (const auto& cls : diagram_->classes) {
-        if (cls.parent_class_id.empty()) {
+        if (cls.parent_class_ids.empty()) {
             depth_map[cls.id] = 0;
         } else {
-            children_of[cls.parent_class_id].push_back(cls.id);
+            // Primary parent ([0]) defines the tree structure for layout.
+            children_of[cls.parent_class_ids[0]].push_back(cls.id);
         }
     }
     std::queue<std::string> bfs_queue;
@@ -128,13 +129,128 @@ void PhysicsLayout::build_world(const std::unordered_map<std::string, Rect>* pre
         levels[depth_map[cls.id]].push_back(cls.id);
     }
 
+    // 3b. Barycentric sorting: minimize edge crossings between levels.
+    // Build composition ownership map for cross-level attraction.
+    std::unordered_map<std::string, std::vector<std::string>> composition_targets;
+    std::unordered_map<std::string, std::vector<std::string>> composition_owners;
+    for (const auto& cls : diagram_->classes) {
+        for (const auto& co : cls.child_objects) {
+            composition_targets[cls.id].push_back(co.class_id);
+            composition_owners[co.class_id].push_back(cls.id);
+        }
+    }
+
+    // Assign initial X positions (center of block in its row).
+    std::unordered_map<std::string, double> pos_x;
+    {
+        for (const auto& kv : levels) {
+            double x = 0.0;
+            for (const auto& id : kv.second) {
+                pos_x[id] = x + block_info[id].width * 0.5;
+                x += block_info[id].width + block_margin;
+            }
+        }
+    }
+
+    int max_depth = 0;
+    for (const auto& kv : levels) {
+        if (kv.first > max_depth) max_depth = kv.first;
+    }
+
+    // 3 iterations of down-sweep + up-sweep.
+    for (int iter = 0; iter < 3; ++iter) {
+        // Down-sweep: depth 1 -> max_depth.
+        for (int d = 1; d <= max_depth; ++d) {
+            auto& ids = levels[d];
+            std::vector<std::pair<double, std::string>> bary_ids;
+            for (const auto& id : ids) {
+                double sum = 0.0;
+                int count = 0;
+                // Primary parent (inheritance).
+                auto pit = children_of.end();
+                for (const auto& cls : diagram_->classes) {
+                    if (cls.id == id && !cls.parent_class_ids.empty()) {
+                        auto px_it = pos_x.find(cls.parent_class_ids[0]);
+                        if (px_it != pos_x.end()) {
+                            sum += px_it->second;
+                            ++count;
+                        }
+                        break;
+                    }
+                }
+                // Composition owners (weaker influence).
+                auto oit = composition_owners.find(id);
+                if (oit != composition_owners.end()) {
+                    for (const auto& owner : oit->second) {
+                        auto ox = pos_x.find(owner);
+                        if (ox != pos_x.end()) {
+                            sum += ox->second * 0.3; // weak influence
+                            count += 1;
+                        }
+                    }
+                }
+                double bary = (count > 0) ? sum / count : pos_x[id];
+                bary_ids.push_back({bary, id});
+            }
+            std::sort(bary_ids.begin(), bary_ids.end());
+            ids.clear();
+            double x = 0.0;
+            for (const auto& bi : bary_ids) {
+                ids.push_back(bi.second);
+                pos_x[bi.second] = x + block_info[bi.second].width * 0.5;
+                x += block_info[bi.second].width + block_margin;
+            }
+        }
+
+        // Up-sweep: max_depth-1 -> 0.
+        for (int d = max_depth - 1; d >= 0; --d) {
+            auto& ids = levels[d];
+            std::vector<std::pair<double, std::string>> bary_ids;
+            for (const auto& id : ids) {
+                double sum = 0.0;
+                int count = 0;
+                // Children (inheritance).
+                auto cit = children_of.find(id);
+                if (cit != children_of.end()) {
+                    for (const auto& ch : cit->second) {
+                        auto cx = pos_x.find(ch);
+                        if (cx != pos_x.end()) {
+                            sum += cx->second;
+                            ++count;
+                        }
+                    }
+                }
+                // Composition targets (weaker influence).
+                auto tit = composition_targets.find(id);
+                if (tit != composition_targets.end()) {
+                    for (const auto& tgt : tit->second) {
+                        auto tx = pos_x.find(tgt);
+                        if (tx != pos_x.end()) {
+                            sum += tx->second * 0.3;
+                            count += 1;
+                        }
+                    }
+                }
+                double bary = (count > 0) ? sum / count : pos_x[id];
+                bary_ids.push_back({bary, id});
+            }
+            std::sort(bary_ids.begin(), bary_ids.end());
+            ids.clear();
+            double x = 0.0;
+            for (const auto& bi : bary_ids) {
+                ids.push_back(bi.second);
+                pos_x[bi.second] = x + block_info[bi.second].width * 0.5;
+                x += block_info[bi.second].width + block_margin;
+            }
+        }
+    }
+
     // 4. Compute hierarchy-based positions (centered rows).
     const double row_gap = 60.0;
     std::unordered_map<std::string, std::pair<double, double>> hierarchy_pos;
     double cur_y = padding;
     for (const auto& kv : levels) {
         const auto& ids = kv.second;
-        // Compute total width and max height of this row.
         double total_w = 0.0;
         double max_h = 0.0;
         for (const auto& id : ids) {
@@ -144,7 +260,6 @@ void PhysicsLayout::build_world(const std::unordered_map<std::string, Rect>* pre
         }
         total_w += static_cast<double>(ids.size() > 1 ? ids.size() - 1 : 0) * block_margin;
 
-        // Center this row.
         double x = padding;
         for (const auto& id : ids) {
             const auto& bi = block_info[id];

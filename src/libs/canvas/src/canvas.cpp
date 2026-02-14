@@ -148,6 +148,7 @@ void DiagramCanvas::set_class_diagram(const diagram_model::ClassDiagram* class_d
     dragged_block_id_.clear();
     active_overlap_pairs_.clear();
     settle_error_reported_ = false;
+    connection_lines_dirty_ = true;
     if (!class_diagram_) return;
 
     auto block_sizes = diagram_render::compute_class_block_sizes(*class_diagram_, class_expanded_, nested_expanded_);
@@ -174,6 +175,7 @@ bool DiagramCanvas::set_class_block_expanded(const std::string& class_id, bool e
         physics_layout_.build(*class_diagram_, class_expanded_, &block_sizes);
     }
     settle_error_reported_ = false;
+    connection_lines_dirty_ = true;
     return true;
 }
 
@@ -291,6 +293,7 @@ bool DiagramCanvas::try_toggle_class_expanded(float screen_x, float screen_y) {
                 physics_layout_.build(*class_diagram_, class_expanded_, &block_sizes);
             }
             settle_error_reported_ = false;
+            connection_lines_dirty_ = true;
             return true;
         }
     }
@@ -433,6 +436,12 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
         diagram_placement::PlacedClassDiagram displayed = physics_layout_.get_placed();
         log_visual_overlaps(displayed);
 
+        // Recompute connection lines when layout has changed or flagged dirty.
+        if (connection_lines_dirty_ || !physics_layout_.is_settled()) {
+            connection_lines_ = diagram_placement::compute_connection_lines(*class_diagram_, displayed);
+            if (physics_layout_.is_settled()) connection_lines_dirty_ = false;
+        }
+
         // Detect hover: check mouse against previously recorded hover regions.
         hovered_class_id_.clear();
         {
@@ -459,7 +468,7 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
         hover_regions_.clear();
         diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed,
             offset_x_, offset_y_, zoom_, nested_expanded_, &nested_hit_buttons_, &nav_hit_buttons_,
-            &hover_regions_, hovered_class_id_);
+            &hover_regions_, hovered_class_id_, connection_lines_);
     } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
             (double)region_width, (double)region_height);
