@@ -29,7 +29,9 @@ void render_class_diagram(ImDrawList* draw_list,
     float offset_x, float offset_y, float zoom,
     const std::unordered_map<std::string, bool>& nested_expanded,
     std::vector<NestedHitButton>* out_hit_buttons = nullptr,
-    std::vector<NavHitButton>* out_nav_buttons = nullptr);
+    std::vector<NavHitButton>* out_nav_buttons = nullptr,
+    std::vector<ClassHoverRegion>* out_hover_regions = nullptr,
+    const std::string& hovered_class_id = {});
 
 // Computes block width/height from content using ImGui::CalcTextSize (current font).
 // Call only when ImGui context is active. Returns map class_id -> Rect (width and height set; x,y zero).

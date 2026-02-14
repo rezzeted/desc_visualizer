@@ -60,6 +60,8 @@ private:
     std::unordered_map<std::string, bool> nested_expanded_;
     std::vector<diagram_render::NestedHitButton> nested_hit_buttons_;
     std::vector<diagram_render::NavHitButton> nav_hit_buttons_;
+    std::vector<diagram_render::ClassHoverRegion> hover_regions_;
+    std::string hovered_class_id_;
     diagram_placement::PhysicsLayout physics_layout_;
     float offset_x_ = 0;
     float offset_y_ = 0;

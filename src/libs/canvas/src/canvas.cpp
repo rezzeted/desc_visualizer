@@ -432,10 +432,34 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
         physics_layout_.step(ImGui::GetIO().DeltaTime);
         diagram_placement::PlacedClassDiagram displayed = physics_layout_.get_placed();
         log_visual_overlaps(displayed);
+
+        // Detect hover: check mouse against previously recorded hover regions.
+        hovered_class_id_.clear();
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            ImVec2 mouse = io.MousePos;
+            ImVec2 win_min_pt = ImGui::GetWindowPos();
+            ImVec2 win_max_pt = ImVec2(win_min_pt.x + region_width, win_min_pt.y + region_height);
+            bool mouse_in_region = mouse.x >= win_min_pt.x && mouse.x <= win_max_pt.x &&
+                                   mouse.y >= win_min_pt.y && mouse.y <= win_max_pt.y;
+            if (mouse_in_region) {
+                double mx, my;
+                screen_to_world(mouse.x, mouse.y, mx, my);
+                for (const auto& hr : hover_regions_) {
+                    if (mx >= hr.x && mx <= hr.x + hr.w && my >= hr.y && my <= hr.y + hr.h) {
+                        hovered_class_id_ = hr.target_class_id;
+                        break;
+                    }
+                }
+            }
+        }
+
         nested_hit_buttons_.clear();
         nav_hit_buttons_.clear();
+        hover_regions_.clear();
         diagram_render::render_class_diagram(draw_list, *class_diagram_, displayed,
-            offset_x_, offset_y_, zoom_, nested_expanded_, &nested_hit_buttons_, &nav_hit_buttons_);
+            offset_x_, offset_y_, zoom_, nested_expanded_, &nested_hit_buttons_, &nav_hit_buttons_,
+            &hover_regions_, hovered_class_id_);
     } else if (diagram_) {
         diagram_placement::PlacedDiagram placed = diagram_placement::place_diagram(*diagram_,
             (double)region_width, (double)region_height);

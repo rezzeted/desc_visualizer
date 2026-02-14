@@ -85,6 +85,7 @@ struct RenderContext {
     const std::unordered_map<std::string, bool>& nested_expanded;
     std::vector<NestedHitButton>* out_hit_buttons;
     std::vector<NavHitButton>* out_nav_buttons;
+    std::vector<ClassHoverRegion>* out_hover_regions;
 };
 
 // Draw a small [+] or [-] button for nested expand/collapse.
@@ -162,6 +163,21 @@ void record_nav_button(const RenderContext& ctx,
     nb.w = static_cast<double>(ctx.f_nav_button_size);
     nb.h = static_cast<double>(ctx.f_nav_button_size);
     ctx.out_nav_buttons->push_back(std::move(nb));
+}
+
+// Record a hover region that maps an area to a target class.
+void record_hover_region(const RenderContext& ctx,
+    const std::string& target_class_id,
+    float rx, float ry, float rw, float rh)
+{
+    if (!ctx.out_hover_regions) return;
+    ClassHoverRegion hr;
+    hr.target_class_id = target_class_id;
+    hr.x = static_cast<double>(rx);
+    hr.y = static_cast<double>(ry);
+    hr.w = static_cast<double>(rw);
+    hr.h = static_cast<double>(rh);
+    ctx.out_hover_regions->push_back(std::move(hr));
 }
 
 // Colors for a nested card (mini-block drawn inside a parent card).
@@ -359,6 +375,11 @@ float render_class_content(
                 draw_nav_button(ctx, nav_x, nav_y);
                 record_nav_button(ctx, parent_cls->id, nav_x, nav_y);
             }
+            // Hover region: entire parent row maps to the parent class.
+            if (parent_cls) {
+                record_hover_region(ctx, parent_cls->id,
+                    item_left, row_top, content_right - item_left, ctx.f_row_height_effective);
+            }
         } else {
             draw_row_text(row_top, ctx.empty_color, "\xE2\x80\x94");
         }
@@ -511,6 +532,11 @@ float render_class_content(
                 draw_nav_button(ctx, nav_x, nav_y);
                 record_nav_button(ctx, child_class->id, nav_x, nav_y);
             }
+            // Hover region: entire child row maps to the child class.
+            if (child_class) {
+                record_hover_region(ctx, child_class->id,
+                    item_left, row_top, content_right - item_left, ctx.f_row_height_effective);
+            }
 
             cy += ctx.f_row_height_effective;
 
@@ -563,7 +589,9 @@ void render_class_diagram(ImDrawList* draw_list,
     float offset_x, float offset_y, float zoom,
     const std::unordered_map<std::string, bool>& nested_expanded,
     std::vector<NestedHitButton>* out_hit_buttons,
-    std::vector<NavHitButton>* out_nav_buttons)
+    std::vector<NavHitButton>* out_nav_buttons,
+    std::vector<ClassHoverRegion>* out_hover_regions,
+    const std::string& hovered_class_id)
 {
     if (!draw_list) return;
 
@@ -647,6 +675,7 @@ void render_class_diagram(ImDrawList* draw_list,
         nested_expanded,
         out_hit_buttons,
         out_nav_buttons,
+        out_hover_regions,
     };
 
     for (const auto& block : placed.blocks) {
@@ -725,6 +754,34 @@ void render_class_diagram(ImDrawList* draw_list,
 
         draw_list->ChannelsMerge();
         draw_list->PopClipRect();
+    }
+
+    // --- Hover highlight pass: draw a glow overlay on the hovered block ---
+    if (!hovered_class_id.empty()) {
+        for (const auto& block : placed.blocks) {
+            if (block.class_id != hovered_class_id) continue;
+
+            const float x = static_cast<float>(block.rect.x);
+            const float y = static_cast<float>(block.rect.y);
+            const float w = static_cast<float>(block.rect.width);
+            const float h = static_cast<float>(block.rect.height);
+
+            // Outer glow (slightly larger than block).
+            const float glow_pad = 4.0f;
+            ImVec2 glow_min = world_to_screen(x - glow_pad, y - glow_pad, offset_x, offset_y, zoom);
+            ImVec2 glow_max = world_to_screen(x + w + glow_pad, y + h + glow_pad, offset_x, offset_y, zoom);
+            const unsigned int glow_color = IM_COL32(100, 180, 255, 50);
+            draw_list->AddRectFilled(glow_min, glow_max, glow_color, 12.0f);
+
+            // Inner highlight overlay on the block itself.
+            ImVec2 min_pt = world_to_screen(x, y, offset_x, offset_y, zoom);
+            ImVec2 max_pt = world_to_screen(x + w, y + h, offset_x, offset_y, zoom);
+            const unsigned int highlight_fill = IM_COL32(100, 180, 255, 25);
+            const unsigned int highlight_border = IM_COL32(100, 180, 255, 160);
+            draw_list->AddRectFilled(min_pt, max_pt, highlight_fill, 8.0f);
+            draw_list->AddRect(min_pt, max_pt, highlight_border, 8.0f, 0, 2.5f);
+            break;
+        }
     }
 }
 

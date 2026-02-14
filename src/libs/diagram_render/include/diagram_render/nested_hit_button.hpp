@@ -25,4 +25,14 @@ struct NavHitButton {
     double h = 0;
 };
 
+// Hover region that maps an area (parent/child row or nested card) to a class ID.
+// Used to highlight the target block when the mouse hovers over the region.
+struct ClassHoverRegion {
+    std::string target_class_id;
+    double x = 0;
+    double y = 0;
+    double w = 0;
+    double h = 0;
+};
+
 } // namespace diagram_render
