@@ -437,10 +437,10 @@ bool DiagramCanvas::update_and_draw(float region_width, float region_height) {
         diagram_placement::PlacedClassDiagram displayed = physics_layout_.get_placed();
         log_visual_overlaps(displayed);
 
-        // Recompute connection lines when layout has changed or flagged dirty.
-        if (connection_lines_dirty_ || !physics_layout_.is_settled()) {
+        // Recompute connection lines when layout has changed, flagged dirty, or block is being dragged.
+        if (connection_lines_dirty_ || !physics_layout_.is_settled() || dragging_block_) {
             connection_lines_ = diagram_placement::compute_connection_lines(*class_diagram_, displayed);
-            if (physics_layout_.is_settled()) connection_lines_dirty_ = false;
+            if (physics_layout_.is_settled() && !dragging_block_) connection_lines_dirty_ = false;
         }
 
         // Detect hover: block-level (highlight parents) + row-level (highlight specific target).
